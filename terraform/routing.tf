@@ -2,7 +2,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "ironhaven-internet-gateway"
+    Name = "${local.name_prefix}-internet-gateway"
   }
 }
 
@@ -15,7 +15,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "ironhaven-public-route-table"
+    Name = "${local.name_prefix}-public-route-table"
     Tier = "public"
   }
 }

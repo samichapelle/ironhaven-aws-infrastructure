@@ -1,37 +1,37 @@
 resource "aws_security_group" "management" {
-  name        = "ironhaven-management-sg"
+  name        = "${local.name_prefix}-management-sg"
   description = "Security group for the management and agent instance"
   vpc_id      = aws_vpc.main.id
 
   tags = {
-    Name = "ironhaven-management-sg"
+    Name = "${local.name_prefix}-management-sg"
     Tier = "management"
   }
 }
 
 resource "aws_security_group" "application" {
-  name        = "ironhaven-application-sg"
+  name        = "${local.name_prefix}-application-sg"
   description = "Security group for internal application workloads"
   vpc_id      = aws_vpc.main.id
 
   tags = {
-    Name = "ironhaven-application-sg"
+    Name = "${local.name_prefix}-application-sg"
     Tier = "application"
   }
 }
 
 resource "aws_security_group" "data" {
-  name        = "ironhaven-data-sg"
+  name        = "${local.name_prefix}-data-sg"
   description = "Security group for private data workloads"
   vpc_id      = aws_vpc.main.id
 
   tags = {
-    Name = "ironhaven-data-sg"
+    Name = "${local.name_prefix}-data-sg"
     Tier = "data"
   }
 }
 
-# Management instance: HTTPS access to AWS APIs and package repositories.
+# Management tier: HTTPS access to AWS APIs and package repositories.
 
 resource "aws_vpc_security_group_egress_rule" "management_https" {
   security_group_id = aws_security_group.management.id
@@ -63,7 +63,7 @@ resource "aws_vpc_security_group_egress_rule" "management_dns_tcp" {
   cidr_ipv4   = aws_vpc.main.cidr_block
 }
 
-# Application tier: only the management instance can reach port 8080.
+# Application tier: only the management tier can reach port 8080.
 
 resource "aws_vpc_security_group_ingress_rule" "application_from_management" {
   security_group_id            = aws_security_group.application.id
