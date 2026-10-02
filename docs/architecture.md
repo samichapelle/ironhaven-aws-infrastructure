@@ -56,10 +56,12 @@ Le principe appliqué est celui du moindre privilège : seuls les flux nécessai
 | Management | Application | TCP | 8080 | Accès au service applicatif |
 | Application | Data | TCP | 5432 | Accès à PostgreSQL |
 | Management | Internet | TCP | 443 | AWS Systems Manager et dépendances HTTPS |
-| Application | Internet | TCP | 443 | Dépendances applicatives |
+| Application | Internet | TCP | 443 | Flux autorisé par le groupe de sécurité, mais non routable sans NAT Gateway |
 | Management/Application | Résolveur DNS du VPC | TCP/UDP | 53 | Résolution DNS |
 
 Aucun accès entrant provenant directement d’Internet n’est autorisé.
+
+La règle HTTPS sortante de la couche application prépare les futures dépendances applicatives. Le sous-réseau applicatif étant privé et dépourvu de NAT Gateway, ce trafic ne dispose actuellement d’aucune route vers Internet.
 
 ### Flux management vers application
 

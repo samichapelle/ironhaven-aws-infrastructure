@@ -35,3 +35,4 @@ vault-password*
 .idea/
 .DS_Store
 Thumbs.db
+*:Zone.Identifier
