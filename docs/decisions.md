@@ -15,7 +15,7 @@
 - Justification : obtenir des identifiants temporaires sans conserver de clé d'accès IAM permanente sur le poste.
 - Compromis : AWS CLI 2.32.0 minimum, reconnexion à expiration et présence d'un cache local d'identifiants temporaires.
 - Séparation : GitHub Actions utilisera à terme un rôle IAM via OIDC, indépendant de cette connexion humaine.
-- État : identité `ironhaven-cli` vérifiée avec STS ; intégration Terraform et permissions de déploiement encore à configurer.
+- État : identité `ironhaven-cli` vérifiée avec STS ; intégration Terraform opérationnelle et politique IAM adaptée aux ressources actuellement gérées.
 
 ## 003 — Détruire l'environnement pendant les pauses
 
