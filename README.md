@@ -1,6 +1,6 @@
 # Ironhaven
 
-Infrastructure AWS sécurisée et reproductible, provisionnée avec Terraform et administrée sans exposition publique de SSH.
+Infrastructure AWS sécurisée et reproductible, provisionnée avec Terraform et administrée avec Ansible sans exposition publique de SSH.
 
 ## Objectif du projet
 
@@ -17,11 +17,18 @@ L’infrastructure est déployée dans la région AWS `eu-west-3` et comprend ac
 - une Internet Gateway et une table de routage publique ;
 - trois groupes de sécurité représentant les couches management, application et données ;
 - un rôle IAM et un instance profile dédiés à AWS Systems Manager ;
-- une instance EC2 Amazon Linux 2023 administrée exclusivement avec Session Manager.
+- une instance EC2 Amazon Linux 2023 administrée avec Session Manager ;
+- un bucket S3 privé et chiffré pour les transferts temporaires Ansible ;
+- une connexion Ansible fonctionnelle à travers Systems Manager.
 
 L’instance de management ne possède aucune règle entrante. Aucun port SSH n’est exposé et aucune clé privée n’est nécessaire pour son administration.
 
-La documentation détaillée est disponible dans [docs/architecture.md](docs/architecture.md).
+La documentation détaillée est disponible dans :
+
+- [Architecture AWS](docs/architecture.md)
+- [Administration avec Ansible](docs/ansible.md)
+- [Décisions techniques](docs/decisions.md)
+- [Troubleshooting](docs/troubleshooting.md)
 
 ## Sécurité
 
@@ -35,6 +42,7 @@ Les principaux contrôles actuellement appliqués sont :
 - administration par AWS Systems Manager Session Manager ;
 - métadonnées EC2 limitées à IMDSv2 ;
 - volume système chiffré ;
+- bucket de transfert Ansible chiffré, privé et nettoyé automatiquement ;
 - exclusion du state Terraform et des informations sensibles du dépôt Git.
 
 ## Technologies
@@ -43,20 +51,20 @@ Les principaux contrôles actuellement appliqués sont :
 
 - AWS
 - Terraform
+- Ansible
 - AWS IAM
 - AWS Systems Manager
 - Amazon EC2
+- Amazon S3
 - Amazon Linux 2023
 - Git et GitHub
 - WSL2 Ubuntu
 
 ### Prévues
 
-- Ansible
 - Docker
 - Nginx
 - Amazon CloudWatch
-- Amazon S3
 - GitHub Actions
 - composant de sécurité pour agent IA
 
@@ -72,11 +80,13 @@ Les principaux contrôles actuellement appliqués sont :
 - [x] Création du rôle IAM et de l’instance profile SSM
 - [x] Déploiement d’une instance EC2 Amazon Linux 2023
 - [x] Validation de l’administration sans SSH avec Session Manager
-- [x] Documentation de l’architecture réseau
+- [x] Création du bucket de transfert temporaire Ansible
+- [x] Validation de la connexion Ansible via SSM
+- [x] Documentation du socle réseau et d’administration
 
 ### Prochaines étapes
 
-- [ ] Automatiser la configuration Linux avec Ansible
+- [ ] Automatiser la configuration et le durcissement Linux avec Ansible
 - [ ] Déployer la couche applicative
 - [ ] Déployer ou simuler la couche de données
 - [ ] Ajouter la journalisation et la supervision
@@ -88,7 +98,13 @@ Les principaux contrôles actuellement appliqués sont :
 
 ```text
 .
+├── ansible/
+│   ├── ansible.cfg
+│   ├── inventory/
+│   │   └── hosts.yml
+│   └── playbooks/
 ├── docs/
+│   ├── ansible.md
 │   ├── architecture.md
 │   ├── decisions.md
 │   ├── troubleshooting.md
@@ -101,6 +117,7 @@ Les principaux contrôles actuellement appliqués sont :
     ├── provider.tf
     ├── routing.tf
     ├── security.tf
+    ├── storage.tf
     ├── variables.tf
     └── versions.tf
 ```

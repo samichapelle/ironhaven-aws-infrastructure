@@ -37,3 +37,13 @@ output "public_route_table_id" {
   description = "ID of the public route table."
   value       = aws_route_table.public.id
 }
+
+output "management_instance_id" {
+  description = "ID of the SSM-managed EC2 instance."
+  value       = aws_instance.management.id
+}
+
+output "ansible_transfer_bucket_name" {
+  description = "Name of the private S3 bucket used for temporary Ansible transfers."
+  value       = aws_s3_bucket.ansible_transfer.id
+}

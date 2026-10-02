@@ -4,7 +4,7 @@
 
 Ironhaven repose sur une architecture AWS segmentée en plusieurs couches afin de limiter les communications entre les ressources et de réduire leur surface d’exposition.
 
-L’infrastructure est provisionnée avec Terraform dans la région `eu-west-3`. Elle comprend actuellement le réseau, le routage, les groupes de sécurité, les composants IAM nécessaires à Systems Manager et une instance EC2 de management.
+L’infrastructure est provisionnée avec Terraform dans la région `eu-west-3`. Elle comprend actuellement le réseau, le routage, les groupes de sécurité, les composants IAM nécessaires à Systems Manager, une instance EC2 de management et un bucket S3 temporaire utilisé par Ansible.
 
 ## Architecture générale
 
@@ -55,7 +55,7 @@ Le principe appliqué est celui du moindre privilège : seuls les flux nécessai
 |---|---|---:|---:|---|
 | Management | Application | TCP | 8080 | Accès au service applicatif |
 | Application | Data | TCP | 5432 | Accès à PostgreSQL |
-| Management | Internet | TCP | 443 | AWS Systems Manager et dépendances HTTPS |
+| Management | Internet | TCP | 443 | Systems Manager, S3 et dépendances HTTPS |
 | Application | Internet | TCP | 443 | Flux autorisé par le groupe de sécurité, mais non routable sans NAT Gateway |
 | Management/Application | Résolveur DNS du VPC | TCP/UDP | 53 | Résolution DNS |
 
@@ -88,12 +88,12 @@ Une instance EC2 est déployée dans le sous-réseau public avec les caractéris
 | Type | `t3.micro` |
 | Stockage | volume racine `gp3` de 8 Gio |
 | Chiffrement | activé |
-| Administration | AWS Systems Manager Session Manager |
+| Administration | Systems Manager et Ansible via SSM |
 | SSH public | désactivé |
 | IMDS | version 2 obligatoire |
 | Suppression du volume | automatique avec l’instance |
 
-L’instance dispose temporairement d’une adresse IPv4 publique afin de joindre les points de terminaison AWS Systems Manager par HTTPS.
+L’instance dispose temporairement d’une adresse IPv4 publique afin de joindre les points de terminaison AWS nécessaires par HTTPS.
 
 Cette adresse ne permet pas d’initier une connexion entrante : le groupe de sécurité management ne contient aucune règle entrante.
 
@@ -102,16 +102,39 @@ Cette adresse ne permet pas d’initier une connexion entrante : le groupe de s�
 L’administration de l’instance utilise la chaîne suivante :
 
 1. l’utilisateur s’authentifie sur AWS avec son profil protégé par MFA ;
-2. AWS Systems Manager autorise l’ouverture d’une session ;
+2. Systems Manager autorise l’ouverture d’une session ;
 3. l’agent SSM installé sur Amazon Linux établit une communication HTTPS sortante ;
 4. le rôle IAM de l’instance fournit uniquement les autorisations nécessaires à Systems Manager ;
-5. la session ouvre un shell avec l’utilisateur `ssm-user`.
+5. la session permet l’exécution des commandes d’administration.
 
 Aucune clé SSH, aucun mot de passe serveur et aucun port d’administration entrant ne sont nécessaires.
 
 ![Instance reconnue par AWS Systems Manager](screenshots/ssm-managed-instance.png)
 
 ![Session ouverte sur l’instance de management](screenshots/ssm-session.png)
+
+## Automatisation avec Ansible
+
+Ansible s’exécute depuis WSL2 et utilise le plugin de connexion `amazon.aws.aws_ssm`. Les modules Ansible sont transférés temporairement à travers un bucket S3, puis exécutés sur l’instance via une session SSM.
+
+Le premier test de connexion a été validé avec le module `ansible.builtin.ping`.
+
+![Connexion Ansible réussie via SSM](screenshots/ansible-ssm-ping.png)
+
+Le détail de la configuration est disponible dans [ansible.md](ansible.md).
+
+## Stockage temporaire Ansible
+
+Le bucket S3 de transfert applique les contrôles suivants :
+
+- blocage complet des accès publics ;
+- chiffrement serveur `AES256` ;
+- absence de versioning afin de ne pas conserver les modules temporaires supprimés ;
+- expiration automatique des objets après un jour ;
+- abandon des transferts multipart incomplets après un jour ;
+- suppression automatique du contenu lors de la destruction contrôlée de l’environnement.
+
+Le bucket ne constitue pas un stockage applicatif. Il sert uniquement aux échanges temporaires nécessaires au plugin Ansible SSM.
 
 ## IAM
 
@@ -138,6 +161,7 @@ L’architecture applique actuellement les principes suivants :
 - rôle IAM dédié à l’instance ;
 - IMDSv2 obligatoire ;
 - volume système chiffré ;
+- bucket temporaire privé, chiffré et soumis à expiration ;
 - permissions IAM du compte de déploiement limitées au projet ;
 - authentification de l’utilisateur AWS protégée par MFA ;
 - infrastructure reproductible avec Terraform ;
@@ -157,7 +181,9 @@ Les éléments suivants sont actuellement provisionnés :
 - une association à la politique `AmazonSSMManagedInstanceCore` ;
 - un instance profile ;
 - une instance EC2 Amazon Linux 2023 ;
-- un volume racine chiffré.
+- un volume racine chiffré ;
+- un bucket S3 temporaire et ses contrôles de sécurité ;
+- une configuration Ansible connectée à l’instance par SSM.
 
 Ne sont pas encore déployés :
 
@@ -165,5 +191,5 @@ Ne sont pas encore déployés :
 - la couche de données ;
 - une NAT Gateway ;
 - la centralisation des journaux ;
-- l’automatisation Ansible ;
+- les playbooks de configuration et de durcissement Ansible ;
 - le composant de sécurité pour agent IA.
