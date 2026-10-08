@@ -1,0 +1,80 @@
+---
+- name: Configure and harden Ironhaven management instance
+  hosts: management
+  become: true
+
+  vars:
+    baseline_packages:
+      - audit
+      - chrony
+      - curl-minimal
+      - git
+      - jq
+      - unzip
+
+  tasks:
+    - name: Update installed packages
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_only: true
+
+    - name: Install baseline administration packages
+      ansible.builtin.dnf:
+        name: "{{ baseline_packages }}"
+        state: present
+
+    - name: Set system timezone to UTC
+      community.general.timezone:
+        name: UTC
+
+    - name: Enable and start time synchronization
+      ansible.builtin.service:
+        name: chronyd
+        state: started
+        enabled: true
+
+    - name: Enable and start Linux auditing
+      ansible.builtin.service:
+        name: auditd
+        state: started
+        enabled: true
+
+    - name: Create Ironhaven SSH hardening configuration
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/99-ironhaven-hardening.conf
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          PermitRootLogin no
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          X11Forwarding no
+          MaxAuthTries 3
+      notify: Restart SSH service
+
+    - name: Validate SSH configuration
+      ansible.builtin.command:
+        cmd: /usr/sbin/sshd -t
+      changed_when: false
+
+    - name: Collect installed package facts
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Display baseline status
+      ansible.builtin.debug:
+        msg:
+          - 'Host: {{ ansible_facts["hostname"] }}'
+          - 'Operating system: {{ ansible_facts["distribution"] }} {{ ansible_facts["distribution_version"] }}'
+          - 'Kernel: {{ ansible_facts["kernel"] }}'
+          - 'Audit installed: {{ "audit" in ansible_facts.packages }}'
+          - 'Chrony installed: {{ "chrony" in ansible_facts.packages }}'
+          - 'Curl installed: {{ "curl-minimal" in ansible_facts.packages }}'
+
+  handlers:
+    - name: Restart SSH service
+      ansible.builtin.service:
+        name: sshd
+        state: restarted
