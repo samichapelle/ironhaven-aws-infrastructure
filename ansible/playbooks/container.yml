@@ -1,12 +1,15 @@
 ---
-- name: Deploy Ironhaven Nginx container
+- name: Build and deploy Ironhaven Nginx container
   hosts: management
   become: true
 
   vars:
+    ironhaven_nginx_root: /opt/ironhaven/nginx
+    ironhaven_nginx_build_root: /opt/ironhaven/nginx/build
     ironhaven_web_root: /opt/ironhaven/nginx/html
     ironhaven_container_name: ironhaven-nginx
-    ironhaven_nginx_image: nginx:1.27-alpine
+    ironhaven_nginx_image: ironhaven-nginx
+    ironhaven_nginx_image_tag: 1.30.5-alpine-patched
     ironhaven_local_port: 8080
 
   tasks:
@@ -23,13 +26,35 @@
         state: started
         enabled: true
 
-    - name: Create Ironhaven web content directory
+    - name: Create Ironhaven Nginx directories
       ansible.builtin.file:
-        path: "{{ ironhaven_web_root }}"
+        path: "{{ item }}"
         state: directory
         owner: root
         group: root
         mode: "0755"
+      loop:
+        - "{{ ironhaven_nginx_root }}"
+        - "{{ ironhaven_nginx_build_root }}"
+        - "{{ ironhaven_web_root }}"
+
+    - name: Copy Ironhaven Nginx Dockerfile
+      ansible.builtin.copy:
+        src: ../files/nginx/Dockerfile
+        dest: "{{ ironhaven_nginx_build_root }}/Dockerfile"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Build patched Ironhaven Nginx image
+      community.docker.docker_image:
+        name: "{{ ironhaven_nginx_image }}"
+        tag: "{{ ironhaven_nginx_image_tag }}"
+        source: build
+        build:
+          path: "{{ ironhaven_nginx_build_root }}"
+          pull: true
+        state: present
 
     - name: Create Ironhaven demonstration page
       ansible.builtin.copy:
@@ -87,10 +112,10 @@
     - name: Deploy Ironhaven Nginx container
       community.docker.docker_container:
         name: "{{ ironhaven_container_name }}"
-        image: "{{ ironhaven_nginx_image }}"
+        image: "{{ ironhaven_nginx_image }}:{{ ironhaven_nginx_image_tag }}"
         state: started
         restart_policy: unless-stopped
-        pull: missing
+        pull: never
         published_ports:
           - "127.0.0.1:{{ ironhaven_local_port }}:80"
         volumes:

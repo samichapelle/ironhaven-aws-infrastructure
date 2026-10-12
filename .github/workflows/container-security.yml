@@ -1,0 +1,43 @@
+name: Container security
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trivy-image-scan:
+    name: Build and scan Ironhaven Nginx
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Build patched Ironhaven Nginx image
+        run: |
+          docker build \
+            --pull \
+            --tag ironhaven-nginx:ci \
+            ansible/files/nginx
+
+      - name: Scan image for fixable high and critical vulnerabilities
+        run: |
+          docker run --rm \
+            --volume /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
+            image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --no-progress \
+            ironhaven-nginx:ci

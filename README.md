@@ -21,7 +21,9 @@ L’infrastructure est déployée dans la région AWS `eu-west-3` et comprend ac
 - un bucket S3 privé et chiffré pour les transferts temporaires Ansible ;
 - une configuration Linux de base et plusieurs contrôles de durcissement ;
 - un service Nginx conteneurisé, déployé et validé avec Ansible ;
-- une centralisation des journaux et des métriques avec Amazon CloudWatch.
+- une centralisation des journaux et des métriques avec Amazon CloudWatch ;
+- une image Nginx corrigée et analysée avec Trivy ;
+- un contrôle de sécurité automatisé avec GitHub Actions.
 
 L’instance de management ne possède aucune règle entrante. Aucun port SSH n’est exposé et aucune clé privée n’est nécessaire pour son administration.
 
@@ -35,6 +37,7 @@ La documentation détaillée est disponible dans :
 - [Administration avec Ansible](docs/ansible.md)
 - [Service conteneurisé Nginx](docs/container.md)
 - [Supervision avec Amazon CloudWatch](docs/monitoring.md)
+- [Analyse de sécurité des conteneurs](docs/security-scanning.md)
 - [Décisions techniques](docs/decisions.md)
 - [Troubleshooting](docs/troubleshooting.md)
 
@@ -57,6 +60,9 @@ Les principaux contrôles actuellement appliqués sont :
 - service Nginx lié uniquement à l’interface locale ;
 - contenu web monté en lecture seule dans le conteneur ;
 - validation automatique de la réponse HTTP ;
+- analyse des vulnérabilités de l’image avec Trivy ;
+- blocage du pipeline sur les vulnérabilités corrigibles `HIGH` ou `CRITICAL` ;
+- dépendances CI externes épinglées par SHA ou digest ;
 - centralisation des journaux système, d’audit et Docker dans CloudWatch ;
 - rétention des journaux CloudWatch limitée à sept jours ;
 - permissions CloudWatch fournies à l’instance par un rôle IAM ;
@@ -98,6 +104,12 @@ Les journaux sont répartis dans trois groupes CloudWatch gérés par Terraform.
 
 ![Validation des journaux et métriques CloudWatch](docs/screenshots/cloudwatch-monitoring-validation.png)
 
+## Sécurité des conteneurs
+
+L’image Nginx initiale contenait 43 vulnérabilités corrigibles de sévérité `HIGH` ou `CRITICAL`. Après mise à jour de l’image de base et application des correctifs Alpine pendant le build, Trivy ne détecte plus aucune vulnérabilité correspondant à cette politique.
+
+Le workflow GitHub Actions reconstruit et analyse l’image à chaque push et pull request vers `main`. Le job échoue automatiquement si une vulnérabilité corrigible `HIGH` ou `CRITICAL` est détectée.
+
 ## Technologies
 
 ### Actuellement utilisées
@@ -107,6 +119,8 @@ Les journaux sont répartis dans trois groupes CloudWatch gérés par Terraform.
 - Ansible
 - Docker
 - Nginx
+- Trivy
+- GitHub Actions
 - Amazon CloudWatch
 - AWS IAM
 - AWS Systems Manager
@@ -116,10 +130,8 @@ Les journaux sont répartis dans trois groupes CloudWatch gérés par Terraform.
 - Git et GitHub
 - WSL2 Ubuntu
 
-### Prévues
+### Prévue
 
-- GitHub Actions
-- analyse de sécurité des conteneurs avec Trivy
 - composant de sécurité pour agent IA
 
 ## État du projet
@@ -146,14 +158,15 @@ Les journaux sont répartis dans trois groupes CloudWatch gérés par Terraform.
 - [x] Centralisation des journaux système, d’audit et Docker
 - [x] Collecte des métriques mémoire et disque
 - [x] Validation de la supervision CloudWatch
-- [x] Documentation du réseau, de l’administration, du service conteneurisé et de la supervision
+- [x] Analyse de l’image Nginx avec Trivy
+- [x] Remédiation des vulnérabilités `HIGH` et `CRITICAL`
+- [x] Ajout d’un contrôle de sécurité bloquant avec GitHub Actions
+- [x] Documentation du réseau, de l’administration, du service conteneurisé, de la supervision et de la remédiation
 
 ### Prochaines étapes
 
 - [ ] Déployer ou simuler la couche de données
-- [ ] Ajouter l’analyse de l’image avec Trivy
 - [ ] Mettre en place les contrôles de sécurité pour agent IA
-- [ ] Ajouter les validations CI avec GitHub Actions
 - [ ] Tester la reconstruction et la destruction complète de l’environnement
 - [ ] Finaliser la documentation du projet
 
@@ -161,8 +174,14 @@ Les journaux sont répartis dans trois groupes CloudWatch gérés par Terraform.
 
 ```text
 .
+├── .github/
+│   └── workflows/
+│       └── container-security.yml
 ├── ansible/
 │   ├── ansible.cfg
+│   ├── files/
+│   │   └── nginx/
+│   │       └── Dockerfile
 │   ├── inventory/
 │   │   └── hosts.yml
 │   ├── playbooks/
@@ -176,6 +195,7 @@ Les journaux sont répartis dans trois groupes CloudWatch gérés par Terraform.
 │   ├── container.md
 │   ├── decisions.md
 │   ├── monitoring.md
+│   ├── security-scanning.md
 │   ├── troubleshooting.md
 │   └── screenshots/
 └── terraform/
