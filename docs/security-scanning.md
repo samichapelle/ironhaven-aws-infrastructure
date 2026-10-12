@@ -105,6 +105,26 @@ L’option suivante transforme le scan en contrôle bloquant :
 
 Si Trivy détecte une vulnérabilité correspondant à la politique, il renvoie le code de sortie `1` et GitHub Actions marque le job comme échoué.
 
+Le workflow a été exécuté avec succès sur la branche `main`. GitHub Actions a reconstruit l’image et terminé le job `Build and scan Ironhaven Nginx` sans détection bloquante.
+
+![Validation du pipeline de sécurité avec GitHub Actions](screenshots/github-actions-container-security.png)
+
+## Pourquoi il s’agit d’un pipeline CI
+
+Le workflow actuel relève de l’intégration continue, ou CI. À chaque modification du dépôt, il vérifie automatiquement que l’image peut être construite et qu’elle respecte la politique de sécurité définie par le projet.
+
+Il ne constitue pas encore un pipeline CI/CD complet : l’image validée n’est ni publiée automatiquement dans un registre, ni déployée automatiquement sur l’infrastructure AWS.
+
+Une évolution vers la livraison ou le déploiement continu pourrait ajouter :
+
+1. une authentification temporaire auprès d’AWS avec GitHub OIDC, sans clé d’accès permanente ;
+2. la publication de l’image validée dans Amazon ECR ;
+3. le déploiement sur l’instance avec Systems Manager ou Ansible ;
+4. un test HTTP après déploiement ;
+5. une procédure de retour arrière en cas d’échec.
+
+Cette extension n’est pas activée à ce stade afin de conserver un périmètre maîtrisé et de ne pas accorder à GitHub Actions des droits de déploiement inutiles au besoin actuel.
+
 ## Sécurisation de la chaîne d’approvisionnement
 
 Le workflow ne repose pas sur des références mutables telles que `latest`.
