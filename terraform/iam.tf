@@ -29,6 +29,11 @@ resource "aws_iam_role_policy_attachment" "management_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+resource "aws_iam_role_policy_attachment" "management_cloudwatch" {
+  role       = aws_iam_role.management.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
 resource "aws_iam_instance_profile" "management" {
   name = "${local.name_prefix}-management-profile"
   role = aws_iam_role.management.name
