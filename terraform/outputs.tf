@@ -12,9 +12,10 @@ output "subnet_ids" {
   description = "IDs of the public, application and data subnets."
 
   value = {
-    public       = aws_subnet.public.id
-    private_app  = aws_subnet.private_app.id
-    private_data = aws_subnet.private_data.id
+    public                 = aws_subnet.public.id
+    private_app            = aws_subnet.private_app.id
+    private_data           = aws_subnet.private_data.id
+    private_data_secondary = aws_subnet.private_data_secondary.id
   }
 }
 
@@ -46,4 +47,21 @@ output "management_instance_id" {
 output "ansible_transfer_bucket_name" {
   description = "Name of the private S3 bucket used for temporary Ansible transfers."
   value       = aws_s3_bucket.ansible_transfer.id
+}
+
+output "database" {
+  description = "Connection metadata for the private PostgreSQL database."
+
+  value = {
+    identifier = aws_db_instance.postgresql.identifier
+    address    = aws_db_instance.postgresql.address
+    port       = aws_db_instance.postgresql.port
+    name       = aws_db_instance.postgresql.db_name
+    username   = aws_db_instance.postgresql.username
+  }
+}
+
+output "database_master_secret_arn" {
+  description = "ARN of the AWS-managed Secrets Manager secret containing the PostgreSQL master credentials."
+  value       = aws_db_instance.postgresql.master_user_secret[0].secret_arn
 }

@@ -47,3 +47,15 @@ resource "aws_subnet" "private_data" {
     Tier = "private"
   }
 }
+
+resource "aws_subnet" "private_data_secondary" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.private_data_secondary_subnet_cidr
+  availability_zone       = data.aws_availability_zones.available.names[0]
+  map_public_ip_on_launch = false
+
+  tags = {
+    Name = "${local.name_prefix}-private-data-secondary-subnet"
+    Tier = "private"
+  }
+}
