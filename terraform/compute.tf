@@ -24,7 +24,7 @@ data "aws_ami" "amazon_linux_2023" {
 }
 
 resource "aws_instance" "management" {
-  ami                         = data.aws_ami.amazon_linux_2023.id
+  ami                         = "ami-03cd84e5bcdbb5761"
   instance_type               = "t3.micro"
   subnet_id                   = aws_subnet.public.id
   vpc_security_group_ids      = [aws_security_group.management.id]
@@ -53,6 +53,8 @@ resource "aws_instance" "management" {
   }
 
   lifecycle {
+    ignore_changes = [user_data]
+
     precondition {
       condition     = data.aws_ami.amazon_linux_2023.architecture == "x86_64"
       error_message = "The selected Amazon Linux AMI must use the x86_64 architecture."
