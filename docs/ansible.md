@@ -244,4 +244,4 @@ Les éléments suivants sont désormais opérationnels :
 - validation de la syntaxe SSH avant redémarrage ;
 - exécution idempotente du playbook.
 
-La prochaine étape consiste à automatiser avec Ansible l’installation de Docker et le déploiement d’un service Nginx conteneurisé.
+Docker et le service Nginx ont depuis été déployés sur management avec le playbook `container.yml`. La prochaine étape est l'automatisation du service HTTP sur l'EC2 applicative privée.

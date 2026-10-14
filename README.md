@@ -10,39 +10,51 @@ L’objectif est de construire une architecture AWS segmentée et reproductible,
 
 ## Architecture
 
-L’infrastructure est déployée dans la région AWS `eu-west-3` et comprend actuellement :
+Ironhaven est déployé en région AWS `eu-west-3` dans un
+VPC `10.42.0.0/16` segmenté en trois couches.
 
-- un VPC dédié `10.42.0.0/16` ;
-- un sous-réseau public, un sous-réseau applicatif privé et deux sous-réseaux de données privés ;
-- une Internet Gateway et une table de routage publique ;
-- trois groupes de sécurité représentant les couches management, application et données ;
-- une instance EC2 Amazon Linux 2023 administrée avec AWS Systems Manager ;
-- un rôle IAM et un instance profile dédiés à Systems Manager et CloudWatch ;
-- un bucket S3 privé et chiffré pour les transferts temporaires Ansible ;
-- une configuration Linux de base et plusieurs contrôles de durcissement ;
-- un service Nginx conteneurisé, déployé et validé avec Ansible ;
-- une centralisation des journaux et des métriques avec Amazon CloudWatch ;
-- une instance Amazon RDS for PostgreSQL privée et chiffrée ;
-- des identifiants de base de données générés et gérés par AWS Secrets Manager ;
-- une image Nginx corrigée et analysée avec Trivy ;
-- un contrôle de sécurité automatisé avec GitHub Actions.
+| Couche | Ressource | Réseau |
+|---|---|---|
+| Management | EC2 Amazon Linux 2023 | 10.42.10.21 |
+| Application | EC2 Amazon Linux 2023 | 10.42.20.104 |
+| Données | RDS PostgreSQL | Sous-réseaux privés |
 
-L’instance de management ne possède aucune règle entrante. Aucun port SSH n’est exposé et aucune clé privée n’est nécessaire pour son administration.
+L'infrastructure comprend :
 
-La base PostgreSQL n’est pas accessible depuis Internet ni directement depuis la couche management. Son port `5432` est autorisé uniquement depuis le groupe de sécurité de la couche application.
+- quatre subnets : public, application et deux subnets de données ;
+- une Internet Gateway et une NAT Gateway ;
+- des tables de routage publique et privée ;
+- trois Security Groups aux flux restrictifs ;
+- deux instances EC2 administrées sans SSH via Systems Manager ;
+- des rôles IAM distincts pour management et application ;
+- un bucket S3 privé pour les transferts Ansible ;
+- un service Nginx conteneurisé sur management ;
+- une base PostgreSQL RDS privée et chiffrée ;
+- un secret RDS géré par AWS Secrets Manager ;
+- des journaux et métriques CloudWatch ;
+- une analyse Trivy automatisée avec GitHub Actions.
 
-Le service Nginx de démonstration écoute uniquement sur `127.0.0.1:8080` à l’intérieur de l’instance. Il peut être consulté depuis le poste local avec un tunnel Systems Manager, sans ouvrir de port entrant supplémentaire.
+L'EC2 applicative n'a aucune adresse IPv4 publique.
+Le port PostgreSQL `5432` est autorisé depuis le
+Security Group applicatif uniquement.
 
-![Page Ironhaven servie par Nginx](docs/screenshots/docker-nginx-page.png)
+Le 14 octobre 2026, une session SSM a permis de vérifier
+le rôle IAM applicatif, de récupérer le secret RDS et
+d'exécuter une requête SQL réelle avec TLS demandé.
 
-La documentation détaillée est disponible dans :
+![Connexion PostgreSQL validée](docs/screenshots/application-rds-postgresql-success.png)
+
+Le service HTTP de la couche applicative reste à déployer.
+Le Nginx existant sur management fonctionne déjà.
+
+### Documentation technique
 
 - [Architecture AWS](docs/architecture.md)
-- [Administration avec Ansible](docs/ansible.md)
-- [Service conteneurisé Nginx](docs/container.md)
-- [Supervision avec Amazon CloudWatch](docs/monitoring.md)
-- [Base de données PostgreSQL](docs/database.md)
-- [Analyse de sécurité des conteneurs](docs/security-scanning.md)
+- [Administration Ansible](docs/ansible.md)
+- [Conteneur Nginx](docs/container.md)
+- [CloudWatch](docs/monitoring.md)
+- [PostgreSQL et validation RDS](docs/database.md)
+- [Analyse Trivy et CI](docs/security-scanning.md)
 - [Décisions techniques](docs/decisions.md)
 - [Troubleshooting](docs/troubleshooting.md)
 
@@ -152,45 +164,42 @@ Le mot de passe principal n’est ni défini dans Terraform ni stocké dans le d
 
 ## État du projet
 
-### Terminé
+### Réalisé et validé
 
-- [x] Configuration sécurisée de l’accès AWS avec MFA
-- [x] Mise en place du socle Terraform
-- [x] Création du VPC et des sous-réseaux segmentés
-- [x] Configuration du routage public
-- [x] Création des groupes et règles de sécurité
-- [x] Création du rôle IAM et de l’instance profile SSM
-- [x] Déploiement d’une instance EC2 Amazon Linux 2023
-- [x] Validation de l’administration sans SSH avec Session Manager
-- [x] Création du bucket de transfert temporaire Ansible
-- [x] Validation de la connexion Ansible via SSM
-- [x] Automatisation de la configuration de base avec Ansible
-- [x] Application de contrôles de durcissement Linux
-- [x] Vérification de l’idempotence des playbooks
-- [x] Installation et activation de Docker
-- [x] Déploiement d’un service Nginx conteneurisé
-- [x] Validation du service avec un tunnel SSM
-- [x] Création des groupes de journaux CloudWatch avec Terraform
-- [x] Centralisation des journaux système, d’audit et Docker
-- [x] Collecte des métriques mémoire et disque
-- [x] Validation de la supervision CloudWatch
-- [x] Analyse de l’image Nginx avec Trivy
-- [x] Remédiation des vulnérabilités `HIGH` et `CRITICAL`
-- [x] Ajout d’un contrôle de sécurité bloquant avec GitHub Actions
-- [x] Création de deux sous-réseaux privés pour la couche données
-- [x] Déploiement d’Amazon RDS for PostgreSQL
-- [x] Gestion des identifiants RDS avec Secrets Manager
-- [x] Validation du chiffrement et de l’isolation réseau de RDS
-- [x] Documentation des briques déployées
+- [x] Authentification AWS avec identifiants temporaires et MFA
+- [x] Provisionnement Terraform du VPC et des quatre subnets
+- [x] Internet Gateway, NAT Gateway et routage privé
+- [x] Security Groups restrictifs
+- [x] EC2 management et administration SSM
+- [x] Automatisation Ansible via SSM et bucket S3
+- [x] Durcissement Linux et configuration de base
+- [x] Docker et Nginx sur management
+- [x] Tests HTTP du service Nginx
+- [x] CloudWatch Logs et métriques système
+- [x] Analyse Trivy et remédiation des vulnérabilités
+- [x] Pipeline GitHub Actions de sécurité
+- [x] RDS PostgreSQL privée avec stockage chiffré
+- [x] Gestion du secret maître avec Secrets Manager
+- [x] EC2 applicative privée sans IP publique
+- [x] Rôle IAM applicatif dédié
+- [x] Connexion SSM sur l'EC2 applicative
+- [x] Résolution DNS et connectivité PostgreSQL TCP 5432
+- [x] Lecture du secret RDS depuis le rôle IAM applicatif
+- [x] Connexion PostgreSQL et requête SQL réelle
+- [x] Capture de validation SQL publiée sur GitHub
 
-### Prochaines étapes
+### À terminer
 
-- [ ] Déployer une ressource dans la couche application privée
-- [ ] Valider une connexion applicative réelle à PostgreSQL
-- [ ] Limiter l’accès au secret au rôle IAM de l’application
-- [ ] Mettre en place les contrôles de sécurité pour agent IA
-- [ ] Tester la reconstruction et la destruction complète de l’environnement
-- [ ] Finaliser la documentation du projet
+- [ ] Déployer le service HTTP dans la couche applicative
+- [ ] Automatiser son déploiement avec Ansible
+- [ ] Tester HTTP depuis management vers application
+- [ ] Tester l'intégration HTTP vers PostgreSQL
+- [ ] Collecter les preuves visuelles finales
+- [ ] Vérifier la reproductibilité et l'état Terraform final
+- [ ] Contrôler les coûts et nettoyer les ressources AWS
+
+L'extension expérimentale de sécurité pour agent IA
+reste hors du périmètre de livraison de cette V1.
 
 ## Structure du dépôt
 
@@ -222,6 +231,7 @@ Le mot de passe principal n’est ni défini dans Terraform ni stocké dans le d
 │   ├── troubleshooting.md
 │   └── screenshots/
 └── terraform/
+    ├── application.tf
     ├── compute.tf
     ├── database.tf
     ├── iam.tf
@@ -238,9 +248,20 @@ Le mot de passe principal n’est ni défini dans Terraform ni stocké dans le d
 
 ## Maîtrise des coûts
 
-L’instance EC2 et l’instance RDS sont arrêtées lorsqu’elles ne sont pas utilisées. Le bucket S3 applique une expiration automatique aux objets temporaires, les journaux CloudWatch sont conservés pendant sept jours et aucune NAT Gateway n’est actuellement déployée.
+L'environnement est temporaire et son coût est surveillé.
 
-L’arrêt de RDS supprime la facturation des heures d’instance, mais le stockage et les sauvegardes restent facturés. Les ressources restent provisionnées par Terraform afin de permettre leur redémarrage et leur validation avant la destruction finale.
+- Les instances EC2 peuvent être arrêtées entre les sessions.
+- RDS peut être arrêtée temporairement, mais son stockage
+  et ses sauvegardes peuvent rester facturés.
+- La NAT Gateway est facturée tant qu'elle reste provisionnée,
+  même lorsque les instances sont arrêtées.
+- Les journaux CloudWatch sont conservés sept jours.
+- Les objets temporaires du bucket S3 expirent automatiquement.
+- Les fichiers `.tfstate`, `.tfvars` et `.tfplan`
+  sont exclus du dépôt Git.
+
+Une destruction contrôlée est prévue après les validations
+finales, sous réserve de sauvegarder les livrables utiles.
 
 ## Avertissement
 

@@ -17,11 +17,20 @@ Le service permet de valider :
 
 ## Périmètre actuel
 
-À ce stade, le conteneur de démonstration fonctionne sur l’instance de management.
+Le service de démonstration Nginx fonctionne sur l'EC2
+management. Il a été déployé et validé avec Ansible.
 
-Ce choix permet de valider la chaîne Ansible, Docker, Nginx et SSM sans ajouter immédiatement une seconde instance EC2 ni une NAT Gateway.
+Depuis le 14 octobre 2026, une seconde instance EC2
+est déployée dans le subnet applicatif privé.
 
-Le service n’est pas destiné à rester sur l’instance de management dans une architecture de production. Une évolution future pourra le déplacer vers une instance dédiée dans le sous-réseau applicatif privé.
+Cette nouvelle instance est accessible par SSM
+et sa connexion à PostgreSQL a été validée.
+
+Le service HTTP destiné à cette instance n'a pas
+encore été déployé.
+
+Le Nginx sur management reste une démonstration
+distincte de la future application.
 
 ## Playbook Ansible
 
@@ -197,7 +206,7 @@ Le service respecte actuellement les principes suivants :
 
 Les évolutions possibles sont :
 
-- déplacer le service vers une instance dédiée dans le sous-réseau applicatif privé ;
+- déployer un service HTTP sur l'EC2 applicative privée désormais existante ;
 - ajouter une image applicative construite par le projet ;
 - analyser l’image avec Trivy ;
 - centraliser les journaux avec CloudWatch ;

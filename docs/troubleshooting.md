@@ -124,3 +124,90 @@ La méthode retenue consiste à :
 3. ajouter uniquement les permissions nécessaires ;
 4. contrôler le nouveau plan Terraform ;
 5. valider le fonctionnement après application.
+
+## Incidents du 13–14 octobre 2026
+
+### 1. Allocation Elastic IP refusée
+
+**Erreur :** `ec2:AllocateAddress` — AccessDenied.
+
+**Cause :** permission manquante sur l'utilisateur Terraform.
+
+**Correction :** extension des permissions EC2 nécessaires
+à l'allocation d'Elastic IP et à la création de la NAT Gateway.
+
+**Résultat :** quatre ressources réseau créées avec succès.
+
+### 2. Remplacement inattendu de l'EC2 management
+
+**Symptôme :** `aws_instance.management must be replaced`.
+
+**Cause :** nouvelle AMI sélectionnée avec `most_recent = true`.
+
+**Correction :** AMI management figée, puis différences
+de `user_data` ignorées pour l'instance existante.
+
+**Résultat :** plan sans modification ni destruction.
+
+### 3. Rafraîchissement Terraform bloqué par IAM
+
+**Erreurs rencontrées :**
+
+- `iam:ListRolePolicies`
+- `logs:ListTagsForResource`
+- `s3:GetBucketPolicy`
+- `s3:GetBucketAcl`
+- `s3:GetBucketCORS`
+- `s3:GetAccelerateConfiguration`
+
+**Cause :** droits de lecture incomplets pour le rafraîchissement
+des ressources déjà présentes dans le state Terraform.
+
+**Correction :** politique complémentaire IAM et
+autorisations S3 de lecture pour le bucket Ironhaven.
+
+**Résultat :** plan Terraform complet obtenu.
+
+### 4. Création de l'instance profile
+
+**Erreur :** `iam:TagInstanceProfile` — AccessDenied.
+
+**Cause :** Terraform devait taguer la nouvelle ressource.
+
+**Correction :** autorisation IAM de tagging de l'instance profile.
+
+**Résultat :** profil et EC2 applicative déployés avec succès.
+
+### 5. Accès Systems Manager refusé depuis le CLI
+
+**Erreur :** `ssm:DescribeInstanceInformation` — AccessDenied.
+
+**Contexte :** PowerUserAccess venait d'être attachée.
+
+**Action effectuée :**
+
+```bash
+aws logout --profile ironhaven
+aws login --profile ironhaven
+```
+
+**Résultat :** les deux instances ont été vues `Online`.
+
+Ce résultat ne permet pas de distinguer avec certitude
+une propagation IAM tardive d'un problème de session.
+
+### 6. Connexion SQL depuis EC2 privée
+
+Une session SSM a permis de tester le rôle IAM,
+la résolution DNS, le port TCP 5432 et la lecture du secret.
+
+Une requête PostgreSQL réelle a réussi.
+
+**Preuve :** `docs/screenshots/application-rds-postgresql-success.png`
+
+Le premier test présentait un avertissement
+`sslmode=require` lié à un argument psql mal placé.
+Le second test a utilisé une chaîne de connexion valide.
+
+**Résultat :** connexion PostgreSQL confirmée,
+avec chiffrement TLS demandé.

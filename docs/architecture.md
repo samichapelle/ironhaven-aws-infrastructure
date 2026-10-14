@@ -8,42 +8,65 @@ L’infrastructure est provisionnée avec Terraform dans la région `eu-west-3`.
 
 ## Architecture générale
 
-Le VPC utilise la plage privée `10.42.0.0/16` et contient quatre sous-réseaux :
+Le VPC utilise la plage `10.42.0.0/16` et quatre sous-réseaux.
 
-| Sous-réseau | CIDR | Zone | Fonction |
+| Subnet | CIDR | Zone | Fonction |
 |---|---|---|---|
-| `ironhaven-public-subnet` | `10.42.10.0/24` | `eu-west-3a` | Instance de management et accès sortant direct |
-| `ironhaven-private-app-subnet` | `10.42.20.0/24` | `eu-west-3a` | Futures ressources applicatives internes |
-| `ironhaven-private-data-subnet` | `10.42.30.0/24` | `eu-west-3b` | Première zone de la couche de données |
-| `ironhaven-private-data-secondary-subnet` | `10.42.31.0/24` | `eu-west-3a` | Seconde zone du groupe de sous-réseaux RDS |
+| Public | 10.42.10.0/24 | eu-west-3a | Management et NAT |
+| Application | 10.42.20.0/24 | eu-west-3a | EC2 applicative privée |
+| Data | 10.42.30.0/24 | eu-west-3b | RDS |
+| Data secondaire | 10.42.31.0/24 | eu-west-3a | DB subnet group |
 
 ```mermaid
 flowchart TD
     Internet[Internet]
     IGW[Internet Gateway]
-    MGMT[Management EC2<br/>Public subnet]
-    APP[Application tier<br/>Private subnet]
-    RDS[(RDS PostgreSQL<br/>Private data subnets)]
+    NAT[NAT Gateway]
+    MGMT[EC2 Management]
+    APP[EC2 Application privee]
+    RDS[(RDS PostgreSQL)]
+    SM[AWS Secrets Manager]
+    SSM[AWS Systems Manager]
 
-    Internet --> IGW --> MGMT
+    Internet --> IGW
+    IGW --> MGMT
+    IGW --> NAT
+    NAT -->|HTTPS sortant| APP
     MGMT -->|TCP 8080| APP
     APP -->|TCP 5432| RDS
+    APP -.->|IAM HTTPS| SM
+    SSM -.->|Sessions sortantes| APP
+    SSM -.->|Sessions sortantes| MGMT
 ```
 
-Les couches application et données sont placées dans des sous-réseaux privés. Elles ne disposent actuellement d’aucune route directe vers Internet.
+Les instances management et application utilisent des rôles IAM
+distincts. Aucune règle entrante publique n'est configurée.
 
 ## Routage
 
-Le sous-réseau public est associé à une table de routage contenant :
+Le subnet public possède une route par défaut
+`0.0.0.0/0` vers l'Internet Gateway.
 
-- une route locale `10.42.0.0/16` pour les communications internes au VPC ;
-- une route par défaut `0.0.0.0/0` vers l’Internet Gateway.
+![Routage public](screenshots/public-route-table.png)
 
-![Table de routage publique](screenshots/public-route-table.png)
+Le subnet applicatif possède une table de routage dédiée,
+avec une route par défaut vers la NAT Gateway.
 
-Les trois sous-réseaux privés utilisent la table de routage principale du VPC, qui ne contient que la route locale.
+Les subnets de données conservent un routage local au VPC,
+sans route Internet configurée par le projet.
 
-Aucune NAT Gateway n’est déployée. Ce choix évite un coût permanent pendant la construction du projet et empêche les ressources privées d’accéder directement à Internet.
+La NAT Gateway a été déployée le 13 octobre 2026 avec :
+
+- une Elastic IP ;
+- une NAT Gateway publique ;
+- une table de routage applicative privée ;
+- une association au subnet `10.42.20.0/24`.
+
+La NAT permet l'accès sortant aux API AWS et aux dépôts
+de dépendances. Elle ne permet pas les connexions
+entrantes non sollicitées depuis Internet.
+
+Source Terraform : `routing.tf`.
 
 ## Segmentation par groupes de sécurité
 
@@ -61,31 +84,22 @@ Les groupes de sécurité sont associés aux interfaces réseau des ressources e
 
 ## Flux autorisés
 
-Le principe appliqué est celui du moindre privilège : seuls les flux nécessaires entre les différentes couches sont autorisés.
+| Source | Destination | Port | Usage |
+|---|---|---|---|
+| Management SG | Application SG | TCP 8080 | Service HTTP |
+| Application SG | Data SG | TCP 5432 | PostgreSQL |
+| Management | Internet | TCP 443 | API et dépendances |
+| Application | Internet via NAT | TCP 443 | API et dépendances |
+| Management/Application | Résolveur VPC | TCP/UDP 53 | DNS |
 
-| Source | Destination | Protocole | Port | Usage |
-|---|---|---:|---:|---|
-| Management | Application | TCP | 8080 | Accès au service applicatif |
-| Application | Data | TCP | 5432 | Accès à PostgreSQL |
-| Management | Internet | TCP | 443 | Systems Manager, S3, CloudWatch et dépendances HTTPS |
-| Application | Internet | TCP | 443 | Autorisé par le groupe, mais non routable sans NAT Gateway |
-| Management/Application | Résolveur DNS du VPC | TCP/UDP | 53 | Résolution DNS |
+Les règles sont restrictives et utilisent des références
+entre Security Groups pour les flux applicatifs.
 
-Aucun accès entrant provenant directement d’Internet n’est autorisé.
+![Règles applicatives](screenshots/application-sg-rules.png)
 
-### Flux management vers application
+![Règles PostgreSQL](screenshots/data-sg-rules.png)
 
-Le groupe `ironhaven-application-sg` accepte le trafic TCP sur le port `8080` uniquement lorsqu’il provient du groupe `ironhaven-management-sg`.
-
-![Règle entrante du groupe application](screenshots/application-sg-rules.png)
-
-### Flux application vers données
-
-Le groupe `ironhaven-data-sg` accepte PostgreSQL sur le port TCP `5432` uniquement lorsque le trafic provient du groupe `ironhaven-application-sg`.
-
-![Règle entrante du groupe data](screenshots/data-sg-rules.png)
-
-La base n’accepte donc aucune connexion entrante depuis Internet ni directement depuis la couche management.
+Aucun accès entrant depuis Internet n'est autorisé.
 
 ## Instance de management
 
@@ -161,7 +175,7 @@ Amazon RDS héberge PostgreSQL dans la couche de données. Le groupe de sous-ré
 | Authentification IAM | activée |
 | Secret principal | généré et géré par RDS dans Secrets Manager |
 
-Le mot de passe principal n’apparaît ni dans le code Terraform, ni dans ses outputs, ni dans le dépôt. Secrets Manager conserve le secret chiffré et active sa rotation automatique.
+Le mot de passe principal n’apparaît ni dans le code Terraform, ni dans ses outputs, ni dans le dépôt. Secrets Manager conserve le secret chiffré ; l'état de sa rotation périodique doit être vérifié.
 
 ![Validation de l’instance RDS PostgreSQL](screenshots/rds-postgresql-validation.png)
 
@@ -179,16 +193,32 @@ L’agent CloudWatch publie également les métriques mémoire et disque dans l�
 
 ## IAM
 
-L’instance utilise les composants suivants :
+Deux rôles sont attachés aux instances EC2.
 
-| Composant | Fonction |
-|---|---|
-| `ironhaven-management-role` | Rôle assumé par EC2 |
-| `AmazonSSMManagedInstanceCore` | Fonctionnement de l’agent SSM |
-| `CloudWatchAgentServerPolicy` | Publication des journaux et métriques |
-| `ironhaven-management-profile` | Instance profile attachant le rôle à EC2 |
+### Management
 
-Les identifiants AWS de l’utilisateur ne sont jamais copiés sur l’instance. Les identifiants PostgreSQL sont gérés séparément par Secrets Manager.
+- `ironhaven-management-role`
+- `AmazonSSMManagedInstanceCore`
+- `CloudWatchAgentServerPolicy`
+- `ironhaven-management-profile`
+
+### Application
+
+- `ironhaven-application-role`
+- `AmazonSSMManagedInstanceCore`
+- Politique de lecture du secret RDS :
+  `ironhaven-application-secrets`
+- `ironhaven-application-profile`
+
+Le rôle applicatif autorise la lecture de l'ARN du secret
+maître RDS uniquement. Le mot de passe n'est pas inscrit
+dans Terraform.
+
+Le compte humain de déploiement `ironhaven-cli` dispose
+temporairement de permissions étendues pour le laboratoire.
+Il est distinct des rôles assumés par les instances.
+
+Les deux EC2 ont été validées Online dans Systems Manager.
 
 ## Principes de sécurité
 
@@ -204,7 +234,7 @@ L’architecture applique actuellement les principes suivants :
 - IMDSv2 obligatoire ;
 - volumes EC2 et RDS chiffrés ;
 - base PostgreSQL non publiquement accessible ;
-- secret RDS absent du code et soumis à rotation ;
+- secret RDS absent du code ; rotation périodique à vérifier ;
 - bucket temporaire privé, chiffré et soumis à expiration ;
 - centralisation des journaux dans CloudWatch ;
 - infrastructure reproductible avec Terraform ;
@@ -212,27 +242,27 @@ L’architecture applique actuellement les principes suivants :
 
 ## État actuel
 
-Les éléments suivants sont actuellement provisionnés :
+### Déployé et testé
 
-- un VPC ;
-- quatre sous-réseaux répartis sur deux zones de disponibilité ;
-- une Internet Gateway ;
-- une table de routage publique et son association ;
-- trois groupes de sécurité et leurs règles ;
-- un rôle IAM et un instance profile pour l’instance de management ;
-- une instance EC2 Amazon Linux 2023 avec volume chiffré ;
-- un bucket S3 temporaire et ses contrôles de sécurité ;
-- trois groupes CloudWatch Logs ;
-- une configuration Ansible connectée par SSM ;
-- un service Nginx conteneurisé ;
-- un groupe de sous-réseaux RDS ;
-- une instance Amazon RDS for PostgreSQL privée et chiffrée ;
-- un secret principal RDS géré par Secrets Manager.
+- VPC et quatre subnets ;
+- routage public et NAT Gateway ;
+- deux instances EC2, dont une sans IP publique ;
+- trois Security Groups ;
+- rôles et instance profiles IAM dédiés ;
+- administration via Systems Manager ;
+- S3 temporaire pour Ansible ;
+- Nginx conteneurisé sur management ;
+- supervision CloudWatch de management ;
+- PostgreSQL RDS privée ;
+- secret maître géré dans Secrets Manager ;
+- connexion SQL réelle depuis application.
 
-Les prochaines extensions prévues sont :
+![Validation SQL](screenshots/application-rds-postgresql-success.png)
 
-- une ressource de calcul dans la couche application privée ;
-- une connexion applicative réelle vers PostgreSQL ;
-- un rôle IAM applicatif limité à son secret ;
-- les contrôles de sécurité dédiés au futur composant d’agent IA ;
-- un test final de reconstruction et de destruction complète.
+### À finaliser
+
+- service HTTP sur l'EC2 applicative ;
+- automatisation Ansible correspondante ;
+- test HTTP depuis management ;
+- intégration HTTP avec PostgreSQL ;
+- captures et validation finale.

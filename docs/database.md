@@ -48,14 +48,21 @@ Les conséquences sont les suivantes :
 
 ## Gestion des identifiants
 
-Terraform ne contient aucun mot de passe de base de données. L’option `manage_master_user_password` demande à Amazon RDS de :
+Terraform utilise `manage_master_user_password = true`.
 
-1. générer un mot de passe aléatoire ;
-2. l’enregistrer dans AWS Secrets Manager ;
-3. chiffrer le secret avec AWS KMS ;
-4. gérer sa rotation automatiquement.
+Amazon RDS génère et stocke le secret maître dans
+AWS Secrets Manager. Terraform expose uniquement son ARN.
 
-Terraform expose uniquement l’ARN du secret afin que les composants autorisés puissent le référencer. L’ARN n’est pas un secret, mais la valeur retournée par `secretsmanager:GetSecretValue` ne doit jamais être enregistrée dans le dépôt, une capture d’écran ou les journaux CI.
+L'instance applicative peut lire ce secret grâce à la
+permission `secretsmanager:GetSecretValue` limitée à
+la ressource concernée.
+
+Les identifiants ne sont pas codés en dur dans Terraform
+et n'ont pas été affichés lors de la validation SQL.
+
+La gestion du mot de passe par RDS ne suffit pas,
+à elle seule, à démontrer que la rotation périodique
+est actuellement activée. Ce point reste à confirmer.
 
 ## Configuration Terraform
 
@@ -77,22 +84,67 @@ Ces choix sont adaptés à une infrastructure temporaire. Ils devraient être re
 
 ## Validation
 
-Après le déploiement, les contrôles ont confirmé :
+### Validation de l'instance RDS
 
-- le statut `available` de l’instance ;
-- le chiffrement du stockage ;
-- l’absence d’exposition publique ;
-- le statut `active` du secret géré par RDS ;
-- l’activation de la rotation du secret ;
-- l’absence de divergence entre l’infrastructure AWS et le code Terraform.
+Les contrôles initiaux ont porté sur le statut RDS,
+le chiffrement, l'absence d'accès public et le secret maître.
 
-![Validation de l’instance RDS PostgreSQL](screenshots/rds-postgresql-validation.png)
+![Validation RDS](screenshots/rds-postgresql-validation.png)
 
-La commande `terraform plan` retourne :
+### Validation applicative du 14 octobre 2026
 
-```text
-No changes. Your infrastructure matches the configuration.
+Une EC2 Amazon Linux 2023 a été créée dans
+le subnet `10.42.20.0/24` avec l'adresse `10.42.20.104`.
+
+Les contrôles suivants ont été réalisés :
+
+| Vérification | Résultat |
+|---|---|
+| Absence d'IPv4 publique | PASS |
+| Administration SSM | PASS |
+| Rôle IAM dédié | PASS |
+| DNS privé RDS | PASS |
+| TCP 5432 vers RDS | PASS |
+| Lecture du secret via le rôle IAM | PASS |
+| Authentification PostgreSQL | PASS |
+| Exécution réelle d'une requête SQL | PASS |
+
+La connexion utilise le compte `ironhaven_admin`
+et l'option `sslmode=require`.
+
+La requête exécutée a été :
+
+```sql
+SELECT
+  current_database(),
+  current_user,
+  inet_server_addr(),
+  now();
 ```
+
+Le résultat a confirmé :
+
+- la base `ironhaven` ;
+- l'utilisateur `ironhaven_admin` ;
+- l'adresse privée RDS `10.42.30.44`.
+
+Une seconde validation a confirmé PostgreSQL 18.3.
+
+![Connexion PostgreSQL depuis EC2 privée](screenshots/application-rds-postgresql-success.png)
+
+Le secret a été récupéré grâce au rôle IAM de l'EC2,
+sans affichage du mot de passe.
+
+Le mode TLS `require` chiffre la connexion, mais ne
+vérifie pas intégralement le certificat du serveur.
+Le mode `verify-full` serait préférable en production.
+
+Ce test utilise le compte maître RDS. Un utilisateur
+SQL applicatif dédié, avec des droits limités,
+reste à créer pour le futur service HTTP.
+
+Cette validation prouve une connexion SQL effective,
+pas encore un service applicatif HTTP intégré.
 
 ## Exploitation temporaire
 
@@ -124,8 +176,8 @@ Cette implémentation constitue une base de démonstration sécurisée, mais plu
 - protection contre la suppression ;
 - clé KMS gérée par le client ;
 - surveillance et alarmes dédiées à RDS ;
-- accès au secret limité au rôle IAM de l’application ;
+- rôle IAM applicatif limité à la lecture du secret RDS (validé) ;
 - authentification TLS vérifiée côté client ;
 - tests réguliers de restauration.
 
-La prochaine étape du projet consiste à déployer une ressource dans la couche application, lui accorder un accès minimal au secret, puis valider une connexion réelle à PostgreSQL sans identifiants codés en dur.
+La prochaine étape est le déploiement automatisé du service HTTP applicatif, puis la validation d'une requête SQL réalisée par ce service.

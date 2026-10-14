@@ -24,3 +24,40 @@
 - Justification : maîtriser les coûts et démontrer la capacité de reconstruction.
 - Compromis : temps de redéploiement ; le stockage persistant éventuel doit être inventorié et son coût évalué.
 - État : procédure de destruction et contrôle des ressources résiduelles à construire et tester.
+
+## 004 — Utiliser une NAT Gateway pour la couche application
+
+- Contexte : une EC2 privée doit accéder aux API AWS et aux dépôts.
+- Décision : NAT Gateway publique et routage privé applicatif.
+- Justification : sortie Internet sans IP publique sur l'EC2.
+- Compromis : coûts horaires et trafic NAT.
+- État : déployé le 13 octobre 2026.
+
+## 005 — Séparer management et application
+
+- Décision : deux EC2 et deux rôles IAM distincts.
+- Justification : isolation des fonctions et des permissions.
+- État : EC2 privée déployée le 14 octobre 2026.
+
+## 006 — Accéder au secret RDS via le rôle applicatif
+
+- Décision : permission GetSecretValue limitée au secret RDS.
+- Justification : aucun mot de passe dans le code Terraform.
+- Limite : validation initiale avec le compte maître PostgreSQL.
+- État : connexion réelle et requête SQL réussies.
+
+## 007 — Permissions temporaires du déploiement
+
+- Contexte : refus IAM répétés pendant le provisionnement.
+- Décision : PowerUserAccess temporaire pour ironhaven-cli.
+- Distinction : les rôles EC2 conservent leurs droits propres.
+- Compromis : droits de déploiement plus larges pendant le lab.
+- Suite : supprimer cet accès après finalisation.
+
+## 008 — Stabiliser l'instance management
+
+- Contexte : une nouvelle AMI provoquait un remplacement Terraform.
+- Décision : figer son AMI et ignorer les écarts de user_data.
+- Justification : préserver la configuration Ansible existante.
+- Limite : ces évolutions devront être gérées explicitement.
+- État : plan validé sans remplacement de management.
