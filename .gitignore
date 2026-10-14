@@ -36,3 +36,7 @@ vault-password*
 .DS_Store
 Thumbs.db
 *:Zone.Identifier
+
+# Terraform saved plans
+*.tfplan
+*.tfplan.*

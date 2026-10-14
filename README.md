@@ -119,7 +119,7 @@ Le workflow GitHub Actions reconstruit et analyse l’image à chaque push et pu
 
 Amazon RDS héberge une instance PostgreSQL dans deux sous-réseaux privés répartis sur deux zones de disponibilité. L’instance n’est pas publiquement accessible, son stockage est chiffré et ses journaux PostgreSQL sont exportés vers CloudWatch.
 
-Le mot de passe principal n’est ni défini dans Terraform ni stocké dans le dépôt. RDS le génère et le conserve dans Secrets Manager avec rotation automatique.
+Le mot de passe principal n’est ni défini dans Terraform ni stocké dans le dépôt. RDS le génère et le conserve dans Secrets Manager. La rotation automatique doit encore être vérifiée.
 
 ![Validation de l’instance RDS PostgreSQL](docs/screenshots/rds-postgresql-validation.png)
 
@@ -179,7 +179,7 @@ Le mot de passe principal n’est ni défini dans Terraform ni stocké dans le d
 - [x] Ajout d’un contrôle de sécurité bloquant avec GitHub Actions
 - [x] Création de deux sous-réseaux privés pour la couche données
 - [x] Déploiement d’Amazon RDS for PostgreSQL
-- [x] Gestion et rotation des identifiants avec Secrets Manager
+- [x] Gestion des identifiants RDS avec Secrets Manager
 - [x] Validation du chiffrement et de l’isolation réseau de RDS
 - [x] Documentation des briques déployées
 
