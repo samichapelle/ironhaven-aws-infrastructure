@@ -1,0 +1,182 @@
+---
+- name: Deploy Ironhaven private application
+  hosts: application
+  become: true
+
+  vars:
+    app_root: /opt/ironhaven/application
+    app_user: ironhaven-app
+    app_service: ironhaven-application
+    terraform_root: "{{ playbook_dir }}/../../terraform"
+
+    db_metadata: >-
+      {{
+        lookup(
+          'ansible.builtin.pipe',
+          'terraform -chdir=' ~ terraform_root ~ ' output -json database'
+        ) | from_json
+      }}
+
+    db_secret_arn: >-
+      {{
+        lookup(
+          'ansible.builtin.pipe',
+          'terraform -chdir=' ~ terraform_root ~
+          ' output -raw database_master_secret_arn'
+        )
+      }}
+
+  tasks:
+    - name: Install application system dependencies
+      ansible.builtin.dnf:
+        name:
+          - python3
+          - python3-pip
+        state: present
+
+    - name: Create dedicated application user
+      ansible.builtin.user:
+        name: "{{ app_user }}"
+        system: true
+        shell: /sbin/nologin
+        home: "{{ app_root }}"
+        create_home: false
+
+    - name: Create application directory
+      ansible.builtin.file:
+        path: "{{ app_root }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0750"
+
+    - name: Copy Flask application
+      ansible.builtin.copy:
+        src: ../files/application/app.py
+        dest: "{{ app_root }}/app.py"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0640"
+      notify: Restart Ironhaven application
+
+    - name: Copy Python requirements
+      ansible.builtin.copy:
+        src: ../files/application/requirements.txt
+        dest: "{{ app_root }}/requirements.txt"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0640"
+
+    - name: Create Python virtual environment
+      ansible.builtin.command:
+        cmd: python3 -m venv "{{ app_root }}/venv"
+        creates: "{{ app_root }}/venv/bin/python"
+
+    - name: Install application Python packages
+      ansible.builtin.pip:
+        requirements: "{{ app_root }}/requirements.txt"
+        virtualenv: "{{ app_root }}/venv"
+      notify: Restart Ironhaven application
+
+    - name: Allow application user to use the virtual environment
+      ansible.builtin.file:
+        path: "{{ app_root }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        recurse: true
+
+    - name: Initialize PostgreSQL demonstration table
+      ansible.builtin.command:
+        cmd: "{{ app_root }}/venv/bin/python {{ app_root }}/app.py --init-db"
+      become_user: "{{ app_user }}"
+      environment:
+        AWS_REGION: eu-west-3
+        RDS_SECRET_ARN: "{{ db_secret_arn }}"
+        DB_HOST: "{{ db_metadata.address }}"
+        DB_NAME: "{{ db_metadata.name }}"
+      register: db_initialization
+      changed_when: false
+      no_log: true
+
+    - name: Create systemd application service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/ironhaven-application.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Ironhaven Private Flask Application
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          User={{ app_user }}
+          Group={{ app_user }}
+          WorkingDirectory={{ app_root }}
+          Environment="AWS_REGION=eu-west-3"
+          Environment="RDS_SECRET_ARN={{ db_secret_arn }}"
+          Environment="DB_HOST={{ db_metadata.address }}"
+          Environment="DB_NAME={{ db_metadata.name }}"
+          ExecStart={{ app_root }}/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:8080 app:app
+          Restart=on-failure
+          RestartSec=5
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectHome=true
+
+          [Install]
+          WantedBy=multi-user.target
+      notify: Restart Ironhaven application
+
+    - name: Enable and start application service
+      ansible.builtin.systemd_service:
+        name: "{{ app_service }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Apply pending service updates
+      ansible.builtin.meta: flush_handlers
+
+    - name: Verify HTTP and PostgreSQL health
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/health
+        status_code: 200
+        return_content: true
+      register: health_response
+      retries: 10
+      delay: 3
+      until: health_response.status == 200
+      changed_when: false
+
+    - name: Verify demonstration records
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/records
+        status_code: 200
+        return_content: true
+      register: records_response
+      changed_when: false
+
+    - name: Assert database records exist
+      ansible.builtin.assert:
+        that:
+          - health_response.json.status == "healthy"
+          - health_response.json.postgresql == "connected"
+          - records_response.json.count >= 3
+        success_msg: "SUCCESS - Flask API connected to private RDS PostgreSQL"
+
+    - name: Display application validation
+      ansible.builtin.debug:
+        msg:
+          - "{{ health_response.json }}"
+          - "{{ records_response.json }}"
+
+  handlers:
+    - name: Restart Ironhaven application
+      ansible.builtin.systemd_service:
+        name: "{{ app_service }}"
+        state: restarted
+        daemon_reload: true
