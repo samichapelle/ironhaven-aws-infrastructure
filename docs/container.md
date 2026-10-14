@@ -69,7 +69,7 @@ Le conteneur utilise les paramètres suivants :
 | Paramètre | Valeur |
 |---|---|
 | Nom | `ironhaven-nginx` |
-| Image | `nginx:1.27-alpine` |
+| Image | `ironhaven-nginx:1.30.5-alpine-patched` |
 | Politique de redémarrage | `unless-stopped` |
 | Adresse d’écoute | `127.0.0.1` |
 | Port de l’hôte | `8080` |
@@ -138,7 +138,7 @@ AWS_PROFILE=ironhaven ansible management \
 
 La sortie confirme :
 
-- l’utilisation de l’image `nginx:1.27-alpine` ;
+- l’utilisation de l’image `ironhaven-nginx:1.30.5-alpine-patched` ;
 - l’état actif du conteneur ;
 - la liaison locale `127.0.0.1:8080->80/tcp` ;
 - la présence du contenu Ironhaven.

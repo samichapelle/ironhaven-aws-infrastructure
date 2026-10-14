@@ -48,7 +48,8 @@ resource "aws_iam_instance_profile" "application" {
 }
 
 resource "aws_instance" "application" {
-  ami                    = data.aws_ami.amazon_linux_2023.id
+  # Pinned to the AMI used by the deployed application EC2 to avoid replacement on a newer AL2023 release.
+  ami                    = "ami-018ced63cf0e10415"
   instance_type          = "t3.micro"
   subnet_id              = aws_subnet.private_app.id
   vpc_security_group_ids = [aws_security_group.application.id]

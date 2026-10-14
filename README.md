@@ -84,7 +84,7 @@ Les principaux contrôles actuellement appliqués sont :
 - rétention des journaux CloudWatch limitée à sept jours ;
 - instance RDS privée avec stockage chiffré ;
 - identifiants PostgreSQL absents du code et gérés par Secrets Manager ;
-- rotation automatique du secret RDS ;
+- gestion du secret maître RDS par Secrets Manager ; rotation périodique à vérifier ;
 - exclusion du state Terraform et des informations sensibles du dépôt Git.
 
 ## Automatisation Ansible

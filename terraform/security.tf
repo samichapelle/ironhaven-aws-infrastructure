@@ -63,6 +63,17 @@ resource "aws_vpc_security_group_egress_rule" "management_dns_tcp" {
   cidr_ipv4   = aws_vpc.main.cidr_block
 }
 
+# Allow the management tier to initiate HTTP connections to the application tier.
+resource "aws_vpc_security_group_egress_rule" "management_to_application" {
+  security_group_id            = aws_security_group.management.id
+  referenced_security_group_id = aws_security_group.application.id
+  description                  = "Allow management to reach the private application HTTP service"
+
+  ip_protocol = "tcp"
+  from_port   = 8080
+  to_port     = 8080
+}
+
 # Application tier: only the management tier can reach port 8080.
 
 resource "aws_vpc_security_group_ingress_rule" "application_from_management" {
