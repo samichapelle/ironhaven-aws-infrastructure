@@ -243,3 +243,51 @@ L'API reste en HTTP sur le réseau privé du VPC.
 Une terminaison HTTPS interne, des tests automatisés
 supplémentaires et une stratégie de rotation/maintenance
 des identités demeurent des axes d'amélioration.
+
+## Bootstrap PostgreSQL reproductible via SSM
+
+Le script `ansible/scripts/bootstrap_database.py` permet
+d'initialiser ou de vérifier la base RDS privée depuis WSL.
+
+Il utilise le profil AWS local `ironhaven` et le document SSM
+`AWS-StartPortForwardingSessionToRemoteHost` pour établir
+un tunnel vers PostgreSQL, sans exposition publique.
+
+Le secret administrateur est récupéré localement depuis
+Secrets Manager avec l'identité IAM de développement.
+Il n'est ni affiché, ni transféré dans un fichier sur EC2,
+ni rendu accessible au rôle applicatif.
+
+Le script établit une connexion avec `sslmode=verify-full`,
+prépare la table de démonstration si nécessaire, insère
+les données manquantes et configure `ironhaven_reader`.
+
+### Exécution depuis WSL
+
+Prérequis :
+- AWS CLI et Session Manager Plugin ;
+- Terraform initialisé avec accès au state S3 ;
+- Python et `psycopg2-binary` ;
+- instance EC2 applicative et RDS disponibles.
+
+Commande :
+
+```bash
+AWS_PROFILE=ironhaven python \
+  ansible/scripts/bootstrap_database.py
+```
+
+Le compte applicatif SQL dispose de `rds_iam`, de l'accès
+à la base et au schéma, et du droit `SELECT` sur la table
+`public.ironhaven_components`.
+
+Les deux exécutions successives réalisées le 14 octobre
+2026 ont retourné `RESULT: PASS`, avec trois enregistrements
+présents et aucun doublon.
+
+![Bootstrap PostgreSQL via tunnel SSM validé](screenshots/database-bootstrap-reproducibility.png)
+
+**Limite :** la méthode est validée sur une base existante.
+Une reconstruction complète depuis une nouvelle instance RDS
+reste à tester. Le script nécessite un compte administrateur
+local autorisé à récupérer le secret maître.

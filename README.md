@@ -371,3 +371,18 @@ aucune infrastructure.
 une chaîne de déploiement continu. Les tests Ansible
 portent ici sur les fichiers YAML et Python, et non sur
 une exécution réelle des playbooks en CI.
+
+## Bootstrap PostgreSQL reproductible
+
+Le provisionnement SQL est désormais séparé du rôle IAM
+de l'application.
+
+Un script local utilise un tunnel AWS Systems Manager vers
+RDS, récupère le secret maître avec l'identité administrative
+du poste WSL et configure le compte SQL `ironhaven_reader`.
+
+Deux exécutions successives ont été validées sans duplication
+des données. Une reconstruction intégrale depuis zéro reste
+à vérifier.
+
+![Validation du bootstrap PostgreSQL](docs/screenshots/database-bootstrap-reproducibility.png)
