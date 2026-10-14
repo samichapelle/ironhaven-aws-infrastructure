@@ -1,0 +1,50 @@
+name: AWS OIDC Validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/github-oidc-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  verify-aws-identity:
+    name: Verify temporary AWS identity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Authenticate using GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::084824953530:role/ironhaven-github-oidc-validation
+          aws-region: eu-west-3
+          role-session-name: ironhaven-github-validation
+          mask-aws-account-id: true
+
+      - name: Verify assumed IAM role
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARN="$(aws sts get-caller-identity --query Arn --output text)"
+          EXPECTED="assumed-role/ironhaven-github-oidc-validation/"
+
+          if [[ "$ARN" != *"$EXPECTED"* ]]; then
+            echo "FAIL: unexpected AWS identity"
+            exit 1
+          fi
+
+          echo "IRONHAVEN | GITHUB OIDC VALIDATION"
+          echo "================================="
+          echo "AUTHENTICATION: SUCCESS"
+          echo "IDENTITY: EXPECTED IAM ROLE"
+          echo "CREDENTIALS: TEMPORARY"
+          echo "AWS STATIC KEYS: NOT REQUIRED"
+          echo "RESULT: PASS"
