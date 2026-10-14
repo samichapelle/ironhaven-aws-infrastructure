@@ -319,3 +319,45 @@ Pour récupérer l'état, il faut disposer des autorisations
 S3 appropriées. Le versioning permet de conserver les
 anciennes versions des objets, sans remplacer une procédure
 de restauration testée.
+
+## Intégration GitHub Actions avec AWS IAM OIDC
+
+L'intégration CI/CD utilise GitHub Actions et
+AWS IAM Identity Provider (OIDC).
+
+Le fournisseur OIDC AWS est configuré pour
+`https://token.actions.githubusercontent.com`,
+avec l'audience `sts.amazonaws.com`.
+
+Le rôle `ironhaven-github-oidc-validation` utilise
+`sts:AssumeRoleWithWebIdentity`.
+
+Sa politique de confiance impose l'identité du dépôt
+Ironhaven, sa branche `main` et l'audience attendue.
+
+Après authentification, le workflow exécute
+`aws sts get-caller-identity` et vérifie que l'ARN
+correspond au rôle assumé.
+
+Le rôle ne possède aucune politique de permissions
+AWS attachée. Il n'autorise donc ni déploiement
+Terraform, ni modification EC2, RDS ou S3.
+
+### Bootstrap IAM
+
+La politique `IronhavenOIDCBootstrap` reste attachée
+à l'utilisateur IAM de développement `ironhaven-cli`
+pendant les travaux sur le lab.
+
+Elle autorise uniquement les opérations IAM ciblées
+nécessaires à la création et à la consultation du
+fournisseur OIDC et du rôle de validation.
+
+Cette exception de bootstrap doit être réévaluée
+avant toute utilisation en environnement professionnel.
+
+### Preuves de validation
+
+![Terraform et Ansible vérifiés par GitHub Actions](screenshots/github-actions-infrastructure-ci.png)
+
+![Authentification OIDC réussie via AWS STS](screenshots/github-actions-oidc-validation.png)

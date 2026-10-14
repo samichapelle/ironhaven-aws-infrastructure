@@ -337,3 +337,37 @@ potentiellement sensible, reste exclu de Git.
 
 **Limite :** le verrouillage S3 est configuré ; un test
 explicite de concurrence reste à réaliser.
+
+## CI/CD et authentification AWS OIDC
+
+Ironhaven utilise trois workflows GitHub Actions :
+
+- **Container security** : construction de l'image Nginx et
+  analyse Trivy des vulnérabilités HIGH/CRITICAL corrigibles.
+- **Infrastructure CI** : contrôles Terraform (`fmt`, `validate`),
+  validation YAML Ansible et syntaxe Python.
+- **AWS OIDC Validation** : authentification fédérée auprès
+  d'AWS STS avec un jeton GitHub temporaire, sans clé AWS
+  permanente enregistrée dans GitHub.
+
+La politique de confiance IAM du rôle OIDC est restreinte
+au dépôt Ironhaven, à la branche `main` et à l'audience
+`sts.amazonaws.com`.
+
+Le rôle `ironhaven-github-oidc-validation` n'a aucune
+permission d'accès aux ressources AWS. Ce workflow
+valide exclusivement l'identité fédérée : il ne déploie
+aucune infrastructure.
+
+### CI infrastructure validée
+
+![GitHub Actions : contrôles Terraform et Ansible réussis](docs/screenshots/github-actions-infrastructure-ci.png)
+
+### Authentification AWS OIDC validée
+
+![GitHub Actions : authentification OIDC temporaire réussie](docs/screenshots/github-actions-oidc-validation.png)
+
+**Limites :** ces validations ne constituent pas encore
+une chaîne de déploiement continu. Les tests Ansible
+portent ici sur les fichiers YAML et Python, et non sur
+une exécution réelle des playbooks en CI.

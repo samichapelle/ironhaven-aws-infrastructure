@@ -270,3 +270,21 @@ Le provisionnement initial du lecteur SQL est conservé
 séparément à titre de bootstrap historique ; il nécessite
 des privilèges administrateurs qui ont été révoqués
 du rôle applicatif courant.
+
+## Contrôles Ansible dans GitHub Actions
+
+Le workflow `.github/workflows/infrastructure-ci.yml`
+vérifie les fichiers YAML Ansible à l'aide de PyYAML
+ainsi que la syntaxe des fichiers Python avec `compileall`.
+
+Ce contrôle est réalisé sur les événements `push`,
+`pull_request` vers `main` et `workflow_dispatch`.
+
+Il ne nécessite aucune permission IAM AWS et n'exécute
+pas les playbooks contre les instances EC2.
+
+Le job Terraform du même workflow utilise
+`terraform init -backend=false` afin de valider
+les configurations sans accéder au state S3.
+
+![Infrastructure CI : Terraform et Ansible réussis](screenshots/github-actions-infrastructure-ci.png)
