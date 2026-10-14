@@ -25,23 +25,6 @@ resource "aws_iam_role_policy_attachment" "application_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-resource "aws_iam_role_policy" "application_secrets" {
-  name = "${local.name_prefix}-application-secrets"
-  role = aws_iam_role.application.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Sid    = "ReadRDSMasterSecret"
-      Effect = "Allow"
-      Action = [
-        "secretsmanager:GetSecretValue"
-      ]
-      Resource = aws_db_instance.postgresql.master_user_secret[0].secret_arn
-    }]
-  })
-}
-
 resource "aws_iam_instance_profile" "application" {
   name = "${local.name_prefix}-application-profile"
   role = aws_iam_role.application.name

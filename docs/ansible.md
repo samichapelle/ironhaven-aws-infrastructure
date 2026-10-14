@@ -245,3 +245,28 @@ Les éléments suivants sont désormais opérationnels :
 - exécution idempotente du playbook.
 
 Docker et le service Nginx ont depuis été déployés sur management avec le playbook `container.yml`. La prochaine étape est l'automatisation du service HTTP sur l'EC2 applicative privée.
+
+## Déploiement de l'application privée
+
+L'inventaire comporte désormais deux groupes :
+`management` et `application`. Ils sont administrés
+avec le plugin `amazon.aws.aws_ssm`, sans SSH.
+
+Le playbook `ansible/playbooks/application.yml`
+configure l'EC2 privée, déploie Flask/Gunicorn,
+crée un service systemd et teste `/health` et `/records`.
+
+Les paramètres non sensibles de RDS proviennent
+des outputs Terraform. Flask utilise exclusivement
+l'authentification IAM du rôle EC2 et le certificat
+Amazon RDS pour vérifier la connexion PostgreSQL.
+
+La seconde exécution du playbook a été validée
+avec `changed=0`, `failed=0` et `unreachable=0`.
+
+Le contrôle de sécurité dédié est :
+`ansible/playbooks/test-database-iam.yml`.
+Le provisionnement initial du lecteur SQL est conservé
+séparément à titre de bootstrap historique ; il nécessite
+des privilèges administrateurs qui ont été révoqués
+du rôle applicatif courant.

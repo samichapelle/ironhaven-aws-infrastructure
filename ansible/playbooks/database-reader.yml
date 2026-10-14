@@ -1,0 +1,51 @@
+---
+- name: Provision restricted PostgreSQL IAM reader
+  hosts: application
+  become: true
+
+  vars:
+    app_root: /opt/ironhaven/application
+    terraform_root: "{{ playbook_dir }}/../../terraform"
+
+    db_metadata: >-
+      {{
+        lookup(
+          'ansible.builtin.pipe',
+          'terraform -chdir=' ~ terraform_root ~ ' output -json database'
+        ) | from_json
+      }}
+
+    db_secret_arn: >-
+      {{
+        lookup(
+          'ansible.builtin.pipe',
+          'terraform -chdir=' ~ terraform_root ~
+          ' output -raw database_master_secret_arn'
+        )
+      }}
+
+  tasks:
+    - name: Copy PostgreSQL reader provisioning script
+      ansible.builtin.copy:
+        src: ../files/database/create_reader.py
+        dest: "{{ app_root }}/create_reader.py"
+        owner: ironhaven-app
+        group: ironhaven-app
+        mode: "0640"
+
+    - name: Create restricted reader and grant IAM authentication
+      ansible.builtin.command:
+        cmd: "{{ app_root }}/venv/bin/python {{ app_root }}/create_reader.py"
+      become_user: ironhaven-app
+      environment:
+        AWS_REGION: eu-west-3
+        RDS_SECRET_ARN: "{{ db_secret_arn }}"
+        DB_HOST: "{{ db_metadata.address }}"
+        DB_NAME: "{{ db_metadata.name }}"
+      register: reader_result
+      changed_when: false
+      no_log: true
+
+    - name: Display permission verification
+      ansible.builtin.debug:
+        msg: "{{ reader_result.stdout_lines }}"

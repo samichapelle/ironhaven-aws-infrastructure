@@ -17,15 +17,6 @@
         ) | from_json
       }}
 
-    db_secret_arn: >-
-      {{
-        lookup(
-          'ansible.builtin.pipe',
-          'terraform -chdir=' ~ terraform_root ~
-          ' output -raw database_master_secret_arn'
-        )
-      }}
-
   tasks:
     - name: Install application system dependencies
       ansible.builtin.dnf:
@@ -86,18 +77,16 @@
         group: "{{ app_user }}"
         recurse: true
 
-    - name: Initialize PostgreSQL demonstration table
-      ansible.builtin.command:
-        cmd: "{{ app_root }}/venv/bin/python {{ app_root }}/app.py --init-db"
-      become_user: "{{ app_user }}"
-      environment:
-        AWS_REGION: eu-west-3
-        RDS_SECRET_ARN: "{{ db_secret_arn }}"
-        DB_HOST: "{{ db_metadata.address }}"
-        DB_NAME: "{{ db_metadata.name }}"
-      register: db_initialization
-      changed_when: false
-      no_log: true
+    - name: Check RDS certificate bundle
+      ansible.builtin.stat:
+        path: /etc/pki/tls/certs/rds-global-bundle.pem
+      register: rds_certificate
+
+    - name: Require RDS certificate bundle
+      ansible.builtin.assert:
+        that:
+          - rds_certificate.stat.exists
+        fail_msg: "RDS CA bundle missing: run test-database-iam.yml first"
 
     - name: Create systemd application service
       ansible.builtin.copy:
@@ -117,13 +106,17 @@
           Group={{ app_user }}
           WorkingDirectory={{ app_root }}
           Environment="AWS_REGION=eu-west-3"
-          Environment="RDS_SECRET_ARN={{ db_secret_arn }}"
           Environment="DB_HOST={{ db_metadata.address }}"
           Environment="DB_NAME={{ db_metadata.name }}"
           ExecStart={{ app_root }}/venv/bin/gunicorn --workers 2 --bind 0.0.0.0:8080 app:app
           Restart=on-failure
           RestartSec=5
           NoNewPrivileges=true
+          ProtectSystem=strict
+          ProtectKernelTunables=true
+          ProtectKernelModules=true
+          ProtectControlGroups=true
+          RestrictSUIDSGID=true
           PrivateTmp=true
           ProtectHome=true
 
@@ -165,6 +158,9 @@
         that:
           - health_response.json.status == "healthy"
           - health_response.json.postgresql == "connected"
+          - health_response.json.database_user == "ironhaven_reader"
+          - health_response.json.authentication == "iam"
+          - health_response.json.tls == "verify-full"
           - records_response.json.count >= 3
         success_msg: "SUCCESS - Flask API connected to private RDS PostgreSQL"
 

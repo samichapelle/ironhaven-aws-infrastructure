@@ -44,8 +44,9 @@ d'exécuter une requête SQL réelle avec TLS demandé.
 
 ![Connexion PostgreSQL validée](docs/screenshots/application-rds-postgresql-success.png)
 
-Le service HTTP de la couche applicative reste à déployer.
-Le Nginx existant sur management fonctionne déjà.
+Le service Flask/Gunicorn de la couche applicative est déployé avec Ansible et supervisé par systemd.
+Les endpoints `/health` et `/records` ont été testés depuis l'instance management et retournent des données de RDS.
+Le Nginx existant sur management reste un service de démonstration distinct.
 
 ### Documentation technique
 
@@ -83,7 +84,10 @@ Les principaux contrôles actuellement appliqués sont :
 - centralisation des journaux système, d’audit et Docker dans CloudWatch ;
 - rétention des journaux CloudWatch limitée à sept jours ;
 - instance RDS privée avec stockage chiffré ;
-- identifiants PostgreSQL absents du code et gérés par Secrets Manager ;
+- application authentifiée à PostgreSQL via IAM, sans mot de passe applicatif permanent ;
+- utilisateur SQL `ironhaven_reader` en lecture seule ;
+- connexion PostgreSQL avec vérification TLS `verify-full` ;
+- accès au secret administrateur RDS refusé au rôle applicatif ;
 - gestion du secret maître RDS par Secrets Manager ; rotation périodique à vérifier ;
 - exclusion du state Terraform et des informations sensibles du dépôt Git.
 
@@ -190,11 +194,11 @@ Le mot de passe principal n’est ni défini dans Terraform ni stocké dans le d
 
 ### À terminer
 
-- [ ] Déployer le service HTTP dans la couche applicative
-- [ ] Automatiser son déploiement avec Ansible
-- [ ] Tester HTTP depuis management vers application
-- [ ] Tester l'intégration HTTP vers PostgreSQL
-- [ ] Collecter les preuves visuelles finales
+- [x] Déployer le service HTTP dans la couche applicative
+- [x] Automatiser son déploiement avec Ansible
+- [x] Tester HTTP depuis management vers application
+- [x] Tester l'intégration HTTP vers PostgreSQL
+- [x] Collecter les preuves visuelles du flux applicatif et de la sécurité IAM
 - [ ] Vérifier la reproductibilité et l'état Terraform final
 - [ ] Contrôler les coûts et nettoyer les ressources AWS
 
@@ -266,3 +270,36 @@ finales, sous réserve de sauvegarder les livrables utiles.
 ## Avertissement
 
 Ce dépôt correspond à un environnement de laboratoire et de démonstration. Les ressources AWS sont temporaires et doivent être arrêtées ou détruites lorsqu’elles ne sont pas utilisées afin de limiter les coûts.
+
+## Démonstration de sécurité applicative
+
+L'application Flask est exécutée sur une EC2 privée et gérée
+par systemd. Elle utilise le rôle IAM de l'instance pour générer
+des jetons temporaires d'authentification PostgreSQL.
+
+La connexion RDS emploie `sslmode=verify-full` avec le bundle
+d'autorités de certification Amazon RDS. Le compte SQL
+`ironhaven_reader` n'a que le droit `SELECT` sur la table
+`public.ironhaven_components`.
+
+Le secret administrateur RDS reste géré par AWS Secrets Manager,
+mais le rôle IAM applicatif ne dispose plus de sa permission
+`secretsmanager:GetSecretValue`.
+
+### Validation du parcours complet
+
+![API privée : authentification IAM, TLS vérifié et données PostgreSQL](docs/screenshots/application-iam-tls-validation.png)
+
+### Lecture seule et vérification TLS
+
+![Test PostgreSQL : SELECT autorisé, écriture refusée et TLS 1.3](docs/screenshots/application-rds-readonly-validation.png)
+
+### Refus d'accès au secret administrateur
+
+![Contrôle IAM : refus d'accès au secret maître RDS](docs/screenshots/application-secret-access-denied.png)
+
+Les captures correspondent à des validations effectuées
+sur l'environnement AWS déployé. Le transport HTTP entre
+management et application reste interne au VPC et n'est
+pas chiffré au niveau applicatif ; le lien application-RDS
+est protégé par TLS avec vérification du certificat.

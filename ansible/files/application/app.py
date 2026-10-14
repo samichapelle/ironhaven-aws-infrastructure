@@ -1,8 +1,6 @@
-"""Ironhaven private application — Flask, RDS and Secrets Manager."""
+"""Ironhaven private API — IAM authentication and verified RDS TLS."""
 
-import json
 import os
-import sys
 
 import boto3
 import psycopg2
@@ -12,26 +10,34 @@ from psycopg2.extras import RealDictCursor
 app = Flask(__name__)
 
 AWS_REGION = os.environ["AWS_REGION"]
-RDS_SECRET_ARN = os.environ["RDS_SECRET_ARN"]
 DB_HOST = os.environ["DB_HOST"]
 DB_NAME = os.environ["DB_NAME"]
 
+DB_USER = "ironhaven_reader"
+RDS_CA_BUNDLE = "/etc/pki/tls/certs/rds-global-bundle.pem"
+
 
 def database_connection():
-    """Retrieve credentials through the EC2 IAM role."""
-    client = boto3.client("secretsmanager", region_name=AWS_REGION)
-
-    response = client.get_secret_value(SecretId=RDS_SECRET_ARN)
-    secret = json.loads(response["SecretString"])
+    """Connect with a temporary IAM token and verified TLS."""
+    token = boto3.client(
+        "rds",
+        region_name=AWS_REGION,
+    ).generate_db_auth_token(
+        DBHostname=DB_HOST,
+        Port=5432,
+        DBUsername=DB_USER,
+        Region=AWS_REGION,
+    )
 
     return psycopg2.connect(
         host=DB_HOST,
         port=5432,
         dbname=DB_NAME,
-        user=secret["username"],
-        password=secret["password"],
-        sslmode="require",
-        connect_timeout=10,
+        user=DB_USER,
+        password=token,
+        sslmode="verify-full",
+        sslrootcert=RDS_CA_BUNDLE,
+        connect_timeout=15,
     )
 
 
@@ -40,7 +46,8 @@ def index():
     return jsonify({
         "project": "Ironhaven",
         "service": "Private Application API",
-        "architecture": "Management -> Application -> RDS",
+        "authentication": "AWS IAM",
+        "database_security": "TLS verify-full",
         "endpoints": ["/health", "/records"],
     })
 
@@ -60,6 +67,8 @@ def health():
             "service": "ironhaven-application",
             "database": db_name,
             "database_user": db_user,
+            "authentication": "iam",
+            "tls": "verify-full",
             "postgresql": "connected",
         }), 200
 
@@ -80,7 +89,7 @@ def records():
             ) as cursor:
                 cursor.execute("""
                     SELECT id, component, tier, status
-                    FROM ironhaven_components
+                    FROM public.ironhaven_components
                     ORDER BY id
                 """)
                 rows = cursor.fetchall()
@@ -88,6 +97,9 @@ def records():
         return jsonify({
             "project": "Ironhaven",
             "source": "Amazon RDS PostgreSQL",
+            "database_user": DB_USER,
+            "authentication": "iam",
+            "tls": "verify-full",
             "count": len(rows),
             "records": [dict(row) for row in rows],
         }), 200
@@ -98,37 +110,3 @@ def records():
             "status": "error",
             "message": "Database query unavailable",
         }), 503
-
-
-def initialize_database():
-    """Create and populate an idempotent demonstration table."""
-    with database_connection() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS ironhaven_components (
-                    id INTEGER PRIMARY KEY,
-                    component VARCHAR(100) NOT NULL,
-                    tier VARCHAR(30) NOT NULL,
-                    status VARCHAR(30) NOT NULL
-                )
-            """)
-
-            cursor.executemany("""
-                INSERT INTO ironhaven_components
-                    (id, component, tier, status)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (id) DO NOTHING
-            """, [
-                (1, "Management EC2", "management", "operational"),
-                (2, "Application EC2", "application", "operational"),
-                (3, "RDS PostgreSQL", "data", "operational"),
-            ])
-
-    print("Database initialized successfully")
-
-
-if __name__ == "__main__":
-    if len(sys.argv) == 2 and sys.argv[1] == "--init-db":
-        initialize_database()
-    else:
-        raise SystemExit("Use Gunicorn to serve this application")

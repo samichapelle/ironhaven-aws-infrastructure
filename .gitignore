@@ -40,3 +40,6 @@ Thumbs.db
 # Terraform saved plans
 *.tfplan
 *.tfplan.*
+
+__pycache__/
+*.py[cod]

@@ -181,3 +181,65 @@ Cette implémentation constitue une base de démonstration sécurisée, mais plu
 - tests réguliers de restauration.
 
 La prochaine étape est le déploiement automatisé du service HTTP applicatif, puis la validation d'une requête SQL réalisée par ce service.
+
+## Durcissement final : authentification IAM et lecture seule
+
+La première validation PostgreSQL a utilisé le compte maître
+RDS pour confirmer la connectivité. L'application a ensuite
+été migrée vers une authentification IAM avec un compte dédié.
+
+### Identité et autorisations
+
+- Compte PostgreSQL : `ironhaven_reader`.
+- Authentification : rôle `rds_iam` et jeton IAM temporaire.
+- Autorisation IAM : `rds-db:connect` limitée à ce compte.
+- Autorisations SQL : `CONNECT`, `USAGE` sur `public`
+  et `SELECT` sur `public.ironhaven_components`.
+- Écritures `INSERT`, `UPDATE` et `DELETE` : refusées.
+- Secret maître : inaccessible depuis le rôle applicatif.
+
+Le compte maître `ironhaven_admin` reste nécessaire aux
+opérations d'administration de RDS, mais n'est plus utilisé
+par Flask. Le secret administrateur continue d'être géré
+par Secrets Manager.
+
+### Chiffrement et validation
+
+La connexion utilise le point de terminaison DNS RDS,
+`sslmode=verify-full` et le bundle CA officiel Amazon RDS.
+Un test réel a confirmé la négociation TLS 1.3,
+l'authentification IAM et la lecture des trois enregistrements.
+
+Une tentative réelle d'écriture a été refusée.
+La récupération du secret administrateur depuis l'EC2
+applicative a également renvoyé `AccessDeniedException`.
+
+![Connexion IAM et requêtes HTTP depuis management](screenshots/application-iam-tls-validation.png)
+
+![PostgreSQL : IAM, TLS 1.3, lecture autorisée, écriture refusée](screenshots/application-rds-readonly-validation.png)
+
+![IAM : lecture du secret maître refusée](screenshots/application-secret-access-denied.png)
+
+### Séparation provisionnement / exploitation
+
+Le script `ansible/files/database/create_reader.py` documente
+le provisionnement initial du rôle SQL, effectué avant la
+révocation de l'accès au secret administrateur.
+
+Le playbook `database-reader.yml` est un outil de
+*bootstrap administrateur*, et non un playbook à lancer
+régulièrement avec les permissions applicatives actuelles.
+
+Le playbook `test-database-iam.yml` vérifie séparément
+la connexion IAM, le certificat TLS et le refus d'écriture.
+
+Le déploiement courant de Flask est piloté par
+`ansible/playbooks/application.yml` et ne requiert plus
+l'accès au secret maître.
+
+### Limites résiduelles
+
+L'API reste en HTTP sur le réseau privé du VPC.
+Une terminaison HTTPS interne, des tests automatisés
+supplémentaires et une stratégie de rotation/maintenance
+des identités demeurent des axes d'amélioration.

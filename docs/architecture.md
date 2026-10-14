@@ -31,7 +31,7 @@ flowchart TD
     Internet --> IGW
     IGW --> MGMT
     IGW --> NAT
-    NAT -->|HTTPS sortant| APP
+    APP -->|HTTPS sortant via NAT| NAT
     MGMT -->|TCP 8080| APP
     APP -->|TCP 5432| RDS
     APP -.->|IAM HTTPS| SM
@@ -210,9 +210,10 @@ Deux rôles sont attachés aux instances EC2.
   `ironhaven-application-secrets`
 - `ironhaven-application-profile`
 
-Le rôle applicatif autorise la lecture de l'ARN du secret
-maître RDS uniquement. Le mot de passe n'est pas inscrit
-dans Terraform.
+Le rôle applicatif dispose de `rds-db:connect` uniquement
+pour le compte PostgreSQL `ironhaven_reader`.
+Il ne dispose plus de `secretsmanager:GetSecretValue`.
+Le secret maître reste géré par RDS dans Secrets Manager.
 
 Le compte humain de déploiement `ironhaven-cli` dispose
 temporairement de permissions étendues pour le laboratoire.
@@ -261,8 +262,29 @@ L’architecture applique actuellement les principes suivants :
 
 ### À finaliser
 
-- service HTTP sur l'EC2 applicative ;
-- automatisation Ansible correspondante ;
-- test HTTP depuis management ;
-- intégration HTTP avec PostgreSQL ;
+- centralisation des journaux applicatifs ;
+- alarmes et simulation d'incident ;
 - captures et validation finale.
+
+## Validation finale du flux applicatif
+
+Le flux trois tiers a été validé depuis l'EC2 management :
+
+1. `management` contacte `application` en HTTP sur TCP 8080 ;
+2. Flask/Gunicorn interroge RDS PostgreSQL sur TCP 5432 ;
+3. le rôle IAM applicatif génère un jeton d'authentification ;
+4. la connexion PostgreSQL vérifie le certificat RDS ;
+5. l'API retourne trois enregistrements réels.
+
+Le Security Group management dispose d'une règle sortante
+TCP 8080 vers le Security Group application.
+Le groupe application accepte ce trafic uniquement
+depuis le groupe management.
+
+Le rôle applicatif conserve `AmazonSSMManagedInstanceCore`
+et la permission `rds-db:connect` dédiée à `ironhaven_reader`.
+Il ne possède plus de permission de lecture du secret maître.
+
+![Flux trois tiers validé](screenshots/application-iam-tls-validation.png)
+
+![Refus de lecture du secret administrateur](screenshots/application-secret-access-denied.png)
