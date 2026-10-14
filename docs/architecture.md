@@ -288,3 +288,34 @@ Il ne possède plus de permission de lecture du secret maître.
 ![Flux trois tiers validé](screenshots/application-iam-tls-validation.png)
 
 ![Refus de lecture du secret administrateur](screenshots/application-secret-access-denied.png)
+
+## Terraform Remote State — Amazon S3
+
+L'état Terraform n'est plus stocké uniquement sur le poste
+de développement. Il est hébergé dans un bucket S3 dédié,
+indépendant du cycle de vie des ressources Ironhaven.
+
+Le backend utilise le chiffrement SSE-S3, le versioning et
+le verrouillage natif S3 (`use_lockfile = true`).
+
+Les accès publics sont bloqués et une bucket policy refuse
+les requêtes utilisant un transport non sécurisé.
+
+Une sauvegarde locale préalable est conservée hors du dépôt.
+La migration a été suivie d'un `terraform plan` confirmant
+l'absence de modifications de l'infrastructure existante.
+
+![Configuration et protections du bucket](screenshots/terraform-remote-state-security.png)
+
+![État distant et infrastructure synchronisée](screenshots/terraform-remote-state-validation.png)
+
+### Exploitation
+
+Les opérations Terraform utilisent maintenant le backend S3.
+La suppression du bucket de state ne fait pas partie du
+`terraform destroy` de l'infrastructure principale.
+
+Pour récupérer l'état, il faut disposer des autorisations
+S3 appropriées. Le versioning permet de conserver les
+anciennes versions des objets, sans remplacer une procédure
+de restauration testée.

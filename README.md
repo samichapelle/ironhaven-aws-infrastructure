@@ -303,3 +303,37 @@ sur l'environnement AWS déployé. Le transport HTTP entre
 management et application reste interne au VPC et n'est
 pas chiffré au niveau applicatif ; le lien application-RDS
 est protégé par TLS avec vérification du certificat.
+
+## Terraform Remote State — Amazon S3
+
+L'état Terraform a été migré du stockage local vers un bucket
+Amazon S3 indépendant de l'infrastructure principale.
+
+- Région : `eu-west-3`
+- Chiffrement au repos : SSE-S3 (`AES256`)
+- Versioning S3 activé
+- Blocage complet des accès publics
+- Politique S3 refusant les connexions non HTTPS
+- Verrouillage natif Terraform : `use_lockfile = true`
+- Sauvegarde locale conservée hors dépôt avant migration
+
+La migration a été vérifiée avec `terraform plan` :
+**No changes — aucune dérive détectée.**
+
+Le bucket de state est géré séparément afin qu'une destruction
+de l'infrastructure applicative ne supprime pas son propre état.
+
+### Sécurité du stockage
+
+![Chiffrement S3, versioning et blocage des accès publics](docs/screenshots/terraform-remote-state-security.png)
+
+### Validation de la migration
+
+![State distant S3, configuration du backend et Terraform No changes](docs/screenshots/terraform-remote-state-validation.png)
+
+La configuration du backend est versionnée dans
+`terraform/backend.tf`. Le contenu réel du state,
+potentiellement sensible, reste exclu de Git.
+
+**Limite :** le verrouillage S3 est configuré ; un test
+explicite de concurrence reste à réaliser.
