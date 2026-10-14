@@ -53,8 +53,8 @@ Terraform utilise `manage_master_user_password = true`.
 Amazon RDS génère et stocke le secret maître dans
 AWS Secrets Manager. Terraform expose uniquement son ARN.
 
-L'instance applicative peut lire ce secret grâce à la
-permission `secretsmanager:GetSecretValue` limitée à
+Lors du test initial, l'instance applicative pouvait lire ce secret grâce à une
+permission temporaire `secretsmanager:GetSecretValue` limitée à
 la ressource concernée.
 
 Les identifiants ne sont pas codés en dur dans Terraform
@@ -141,7 +141,7 @@ Le mode `verify-full` serait préférable en production.
 
 Ce test utilise le compte maître RDS. Un utilisateur
 SQL applicatif dédié, avec des droits limités,
-reste à créer pour le futur service HTTP.
+a depuis été créé ; le service HTTP Flask utilise `ironhaven_reader` avec IAM.
 
 Cette validation prouve une connexion SQL effective,
 pas encore un service applicatif HTTP intégré.
@@ -176,8 +176,8 @@ Cette implémentation constitue une base de démonstration sécurisée, mais plu
 - protection contre la suppression ;
 - clé KMS gérée par le client ;
 - surveillance et alarmes dédiées à RDS ;
-- rôle IAM applicatif limité à la lecture du secret RDS (validé) ;
-- authentification TLS vérifiée côté client ;
+- rôle IAM applicatif limité à `rds-db:connect` (validé) ;
+- authentification TLS vérifiée côté client (`verify-full`, validée) ;
 - tests réguliers de restauration.
 
 La prochaine étape est le déploiement automatisé du service HTTP applicatif, puis la validation d'une requête SQL réalisée par ce service.

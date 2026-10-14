@@ -34,7 +34,7 @@ flowchart TD
     APP -->|HTTPS sortant via NAT| NAT
     MGMT -->|TCP 8080| APP
     APP -->|TCP 5432| RDS
-    APP -.->|IAM HTTPS| SM
+    RDS -.->|Secret maître administrateur| SM
     SSM -.->|Sessions sortantes| APP
     SSM -.->|Sessions sortantes| MGMT
 ```
@@ -206,8 +206,8 @@ Deux rôles sont attachés aux instances EC2.
 
 - `ironhaven-application-role`
 - `AmazonSSMManagedInstanceCore`
-- Politique de lecture du secret RDS :
-  `ironhaven-application-secrets`
+- `rds-db:connect` limité à l'utilisateur SQL `ironhaven_reader` ;
+- aucun accès applicatif à `secretsmanager:GetSecretValue`
 - `ironhaven-application-profile`
 
 Le rôle applicatif dispose de `rds-db:connect` uniquement

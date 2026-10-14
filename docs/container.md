@@ -26,11 +26,11 @@ est déployée dans le subnet applicatif privé.
 Cette nouvelle instance est accessible par SSM
 et sa connexion à PostgreSQL a été validée.
 
-Le service HTTP destiné à cette instance n'a pas
-encore été déployé.
+Le service HTTP Flask/Gunicorn de cette instance est désormais déployé
+avec Ansible ; il utilise IAM et TLS vérifié vers PostgreSQL.
 
 Le Nginx sur management reste une démonstration
-distincte de la future application.
+distincte de l'application Flask opérationnelle.
 
 ## Playbook Ansible
 
@@ -206,7 +206,7 @@ Le service respecte actuellement les principes suivants :
 
 Les évolutions possibles sont :
 
-- déployer un service HTTP sur l'EC2 applicative privée désormais existante ;
+- étendre les tests de l'API Flask privée déjà déployée ;
 - ajouter une image applicative construite par le projet ;
 - analyser l’image avec Trivy ;
 - centraliser les journaux avec CloudWatch ;

@@ -38,9 +38,9 @@ L'EC2 applicative n'a aucune adresse IPv4 publique.
 Le port PostgreSQL `5432` est autorisé depuis le
 Security Group applicatif uniquement.
 
-Le 14 octobre 2026, une session SSM a permis de vérifier
-le rôle IAM applicatif, de récupérer le secret RDS et
-d'exécuter une requête SQL réelle avec TLS demandé.
+La validation initiale par SSM utilisait provisoirement le compte maître RDS.
+Depuis, l'API a été migrée vers une authentification IAM en lecture seule
+avec TLS `verify-full`, sans autorisation de lecture du secret maître.
 
 ![Connexion PostgreSQL validée](docs/screenshots/application-rds-postgresql-success.png)
 
@@ -93,7 +93,7 @@ Les principaux contrôles actuellement appliqués sont :
 
 ## Automatisation Ansible
 
-Trois playbooks sont actuellement disponibles :
+Les playbooks de base ci-dessous sont disponibles (ainsi que les playbooks applicatifs et PostgreSQL) :
 
 | Playbook | Fonction |
 |---|---|
@@ -188,7 +188,7 @@ Le mot de passe principal n’est ni défini dans Terraform ni stocké dans le d
 - [x] Rôle IAM applicatif dédié
 - [x] Connexion SSM sur l'EC2 applicative
 - [x] Résolution DNS et connectivité PostgreSQL TCP 5432
-- [x] Lecture du secret RDS depuis le rôle IAM applicatif
+- [x] Lecture historique du secret RDS depuis le rôle IAM applicatif (droit désormais révoqué)
 - [x] Connexion PostgreSQL et requête SQL réelle
 - [x] Capture de validation SQL publiée sur GitHub
 
@@ -199,7 +199,7 @@ Le mot de passe principal n’est ni défini dans Terraform ni stocké dans le d
 - [x] Tester HTTP depuis management vers application
 - [x] Tester l'intégration HTTP vers PostgreSQL
 - [x] Collecter les preuves visuelles du flux applicatif et de la sécurité IAM
-- [ ] Vérifier la reproductibilité et l'état Terraform final
+- [ ] Vérifier la reconstruction complète ; le state S3 a déjà été migré et le plan final était sans dérive
 - [ ] Contrôler les coûts et nettoyer les ressources AWS
 
 L'extension expérimentale de sécurité pour agent IA

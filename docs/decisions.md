@@ -14,7 +14,7 @@
 - Décision : utilisateur IAM dédié, passkey déverrouillée par biométrie et connexion par navigateur avec `aws login`.
 - Justification : obtenir des identifiants temporaires sans conserver de clé d'accès IAM permanente sur le poste.
 - Compromis : AWS CLI 2.32.0 minimum, reconnexion à expiration et présence d'un cache local d'identifiants temporaires.
-- Séparation : GitHub Actions utilisera à terme un rôle IAM via OIDC, indépendant de cette connexion humaine.
+- Séparation : GitHub Actions utilise désormais un rôle IAM dédié via OIDC, indépendant de cette connexion humaine.
 - État : identité `ironhaven-cli` vérifiée avec STS ; intégration Terraform opérationnelle et politique IAM adaptée aux ressources actuellement gérées.
 
 ## 003 — Détruire l'environnement pendant les pauses
@@ -39,12 +39,13 @@
 - Justification : isolation des fonctions et des permissions.
 - État : EC2 privée déployée le 14 octobre 2026.
 
-## 006 — Accéder au secret RDS via le rôle applicatif
+## 006 — Authentification PostgreSQL IAM et moindre privilège
 
-- Décision : permission GetSecretValue limitée au secret RDS.
-- Justification : aucun mot de passe dans le code Terraform.
-- Limite : validation initiale avec le compte maître PostgreSQL.
-- État : connexion réelle et requête SQL réussies.
+- Historique : le premier test utilisait provisoirement `GetSecretValue` avec le compte maître RDS.
+- Décision actuelle : IAM DB authentication (`rds-db:connect`) uniquement pour `ironhaven_reader`.
+- Permissions SQL : `SELECT` sur `public.ironhaven_components`, écriture refusée.
+- TLS : `sslmode=verify-full` avec certificat CA RDS validé.
+- État : lecture réussie, écriture refusée et accès au secret maître refusé depuis l'EC2 applicative.
 
 ## 007 — Permissions temporaires du déploiement
 

@@ -77,16 +77,13 @@
         group: "{{ app_user }}"
         recurse: true
 
-    - name: Check RDS certificate bundle
-      ansible.builtin.stat:
-        path: /etc/pki/tls/certs/rds-global-bundle.pem
-      register: rds_certificate
-
-    - name: Require RDS certificate bundle
-      ansible.builtin.assert:
-        that:
-          - rds_certificate.stat.exists
-        fail_msg: "RDS CA bundle missing: run test-database-iam.yml first"
+    - name: Install official Amazon RDS CA bundle
+      ansible.builtin.get_url:
+        url: https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+        dest: /etc/pki/tls/certs/rds-global-bundle.pem
+        owner: root
+        group: root
+        mode: "0644"
 
     - name: Create systemd application service
       ansible.builtin.copy:
