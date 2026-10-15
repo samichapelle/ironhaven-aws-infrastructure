@@ -58,13 +58,13 @@ jobs:
             ) and
             ([ $findings[] |
                select(.id == "AWS-0164" and .target == "network.tf")
-             ] | length <= 1) and
+             ] | length == 1) and
             ([ $findings[] |
                select(.id == "AWS-0104" and .target == "security.tf")
-             ] | length <= 2) and
+             ] | length == 2) and
             ([ $findings[] |
                select(.id == "AWS-0132" and .target == "storage.tf")
-             ] | length <= 1)
+             ] | length == 1)
           ' /tmp/ironhaven-trivy.json
 
           echo "PASS: No unexpected HIGH or CRITICAL IaC findings"

@@ -83,7 +83,7 @@ jobs:
           PY
 
       - name: Check Python syntax
-        run: python -m compileall -q ansible/files
+        run: python -m compileall -q ansible/files ansible/scripts
 
       - name: Check repository whitespace
         run: git diff --check HEAD^ HEAD
