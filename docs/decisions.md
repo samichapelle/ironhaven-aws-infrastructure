@@ -17,13 +17,14 @@
 - Séparation : GitHub Actions utilise désormais un rôle IAM dédié via OIDC, indépendant de cette connexion humaine.
 - État : identité `ironhaven-cli` vérifiée avec STS ; intégration Terraform opérationnelle et politique IAM adaptée aux ressources actuellement gérées.
 
-## 003 — Détruire l'environnement pendant les pauses
+## 003 — Maîtriser le cycle de vie d'un laboratoire temporaire
 
-- Contexte : budget cible de 15–20 € et travail par sessions espacées.
-- Décision : rendre les ressources du lab reproductibles et les détruire hors utilisation prolongée.
-- Justification : maîtriser les coûts et démontrer la capacité de reconstruction.
-- Compromis : temps de redéploiement ; le stockage persistant éventuel doit être inventorié et son coût évalué.
-- État : procédure de destruction et contrôle des ressources résiduelles à construire et tester.
+- Contexte : budget cible de 15–20 € et sessions de travail espacées.
+- Intention initiale : détruire puis reconstruire l'environnement entre les longues pauses.
+- Décision effectivement appliquée : conserver l'infrastructure pendant les phases de développement, arrêter ponctuellement EC2 et RDS, puis prévoir une destruction complète en fin de projet.
+- Compromis : les ressources persistantes et la NAT Gateway peuvent générer des coûts même lorsque les instances sont arrêtées.
+- Limite : aucune reconstruction intégrale depuis zéro n'a été validée.
+- État : sauvegarde du state et plan de destruction préparés ; exécution finale à documenter dans [lifecycle.md](lifecycle.md).
 
 ## 004 — Utiliser une NAT Gateway pour la couche application
 

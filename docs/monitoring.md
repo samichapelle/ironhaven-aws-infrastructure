@@ -141,7 +141,8 @@ La solution applique les contrôles suivants :
 La configuration reste adaptée à un environnement de laboratoire :
 
 - collecte toutes les 60 secondes ;
-- seulement deux métriques personnalisées ;
+- deux types de métriques personnalisées sur management
+  (mémoire et disque), avec leurs dimensions CloudWatch ;
 - trois sources de journaux ciblées ;
 - rétention limitée à sept jours ;
 - trois alarmes CloudWatch standards déployées, sans action automatique ;
@@ -197,8 +198,13 @@ lors de l'évaluation normale des métriques.
 
 Cette manipulation démontre la gestion des états et la
 traçabilité CloudWatch. **Elle ne simule pas une réelle
-surcharge CPU**, et ne valide donc pas la détection
-d'une panne applicative réelle.
+surcharge CPU**, ne valide pas la détection automatique
+d'une panne applicative et ne démontre pas l'envoi d'une
+notification.
+
+Les alarmes CPU EC2 utilisent les métriques AWS/EC2 ;
+elles sont distinctes des métriques personnalisées
+mémoire et disque envoyées par l'agent sur management.
 
 Les alarmes peuvent entraîner des frais CloudWatch
 selon les conditions du compte AWS.

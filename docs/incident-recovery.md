@@ -148,7 +148,10 @@ inutilement pendant ce second passage.
 Cet exercice valide une reprise de service applicatif,
 pas un plan complet de reprise après sinistre.
 
-## Validation finale du playbook corrigé
+## Validation ultérieure — version corrigée du playbook
+
+Cette validation est distincte du premier exercice de panne :
+elle concerne le code corrigé sur un service déjà actif.
 
 Après le premier exercice, le contrôle de l'état systemd
 a été remplacé par le module natif Ansible `service_facts`

@@ -1,4 +1,4 @@
-# Analyse de sécurité des conteneurs — Ironhaven
+# Analyses de sécurité — conteneurs, Terraform et Ansible
 
 ## Objectif
 
@@ -129,13 +129,17 @@ Cette extension n’est pas activée à ce stade afin de conserver un périmètr
 
 Le workflow ne repose pas sur des références mutables telles que `latest`.
 
-Les dépendances externes sont épinglées :
+Certaines dépendances externes sont épinglées :
 
 - `actions/checkout` utilise un SHA Git complet ;
-- l’image du scanner Trivy utilise un digest SHA-256 ;
-- l’image de base Nginx utilise une version explicite.
+- l'image du scanner Trivy utilise un digest SHA-256 ;
+- l'image de base Nginx utilise un tag de version explicite,
+  mais pas un digest immuable.
 
-Cette mesure réduit le risque qu’un tag existant soit déplacé vers un contenu différent à l’insu du projet.
+Ces mesures réduisent certains risques liés aux dépendances,
+sans garantir une construction strictement reproductible.
+Les autres actions GitHub utilisent des références de version
+et leurs dépendances doivent également être maintenues.
 
 L’image Nginx est reconstruite avec `--pull` afin de récupérer les mises à jour publiées pour la version sélectionnée, puis elle est systématiquement analysée avant validation.
 
@@ -180,10 +184,15 @@ Le contrôle porte actuellement sur les alertes de sévérité
 HIGH et CRITICAL renvoyées par Trivy. Une exception est limitée
 à son identifiant, son fichier et son nombre d'occurrences.
 
-Cette méthode ne garantit pas que tous les risques de sécurité
-sont détectés, ni qu'une exception existante ne puisse
-masquer une nouvelle occurrence identique si une ancienne
-occurrence a disparu.
+Depuis le commit `3eb9f74`, les cardinalités attendues
+sont vérifiées exactement : une occurrence `AWS-0164`,
+deux `AWS-0104` et une `AWS-0132`.
+
+Cette politique ne vérifie pas la position exacte de chaque
+occurrence dans les ressources Terraform. Une nouvelle alerte
+identique pourrait donc remplacer une ancienne sans déclencher
+d'échec. Le scan ne garantit pas non plus la détection de tous
+les risques de sécurité.
 
 ### Validation GitHub Actions
 

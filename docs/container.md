@@ -202,12 +202,20 @@ Le service respecte actuellement les principes suivants :
 - vérification HTTP automatique ;
 - déploiement reproductible et idempotent avec Ansible.
 
-## Évolutions prévues
+## Périmètre et limites
 
-Les évolutions possibles sont :
+Le conteneur Nginx est un service de démonstration autonome
+sur l'instance management. Il ne constitue pas un reverse
+proxy devant l'application Flask/Gunicorn.
 
-- étendre les tests de l'API Flask privée déjà déployée ;
-- ajouter une image applicative construite par le projet ;
-- analyser l’image avec Trivy ;
-- centraliser les journaux avec CloudWatch ;
-- vérifier automatiquement les playbooks avec GitHub Actions.
+Les réalisations complémentaires de la V1 sont documentées
+séparément :
+
+- [Application privée et PostgreSQL](database.md) ;
+- [Analyse de l'image Nginx avec Trivy](security-scanning.md) ;
+- [Supervision CloudWatch](monitoring.md) ;
+- [Contrôles Terraform et Ansible dans GitHub Actions](security-scanning.md).
+
+Les évolutions non réalisées comprennent la conteneurisation
+de Flask, une terminaison HTTPS interne et la centralisation
+des journaux applicatifs Flask dans CloudWatch.
