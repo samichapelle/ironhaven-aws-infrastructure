@@ -1,440 +1,187 @@
-# Ironhaven
+# Ironhaven — AWS Infrastructure & Security
 
-Infrastructure AWS sécurisée et reproductible, provisionnée avec Terraform, configurée avec Ansible et administrée sans exposition publique de SSH.
+**Infrastructure cloud à trois couches, provisionnée avec Terraform, administrée avec Ansible et AWS Systems Manager, et validée par des tests réels de sécurité et d'exploitation.**
 
-## Objectif du projet
+**Stack :** AWS · Terraform · Ansible · Linux · Docker · PostgreSQL · Python · GitHub Actions · Trivy
 
-Ironhaven est un projet pratique consacré au cycle de vie complet d’une infrastructure cloud sécurisée : provisionnement, configuration, durcissement, validation, supervision et destruction contrôlée.
+> **Statut :** V1 fonctionnelle et validée en octobre 2026. Laboratoire temporaire destiné à être détruit après les validations finales. Les résultats présentés correspondent aux tests réalisés, et non à un service de production permanent.
 
-L’objectif est de construire une architecture AWS segmentée et reproductible, puis d’automatiser sa configuration et ses contrôles de sécurité. Une attention particulière est portée au principe du moindre privilège, à la traçabilité, à la maintenabilité et à la maîtrise des coûts.
+## Vue d'ensemble
 
-## Architecture
+Ironhaven est un projet personnel d'administration systèmes, de cloud et de cybersécurité visant à couvrir le cycle de vie d'une infrastructure : conception, déploiement, configuration, sécurisation, supervision, diagnostic et fermeture.
 
-Ironhaven est déployé en région AWS `eu-west-3` dans un
-VPC `10.42.0.0/16` segmenté en trois couches.
+Le projet a été exécuté sur un véritable compte AWS dans la région **Paris (`eu-west-3`)**, avec un poste de contrôle **Windows 11 / WSL2 Ubuntu**.
 
-| Couche | Ressource | Réseau |
-|---|---|---|
-| Management | EC2 Amazon Linux 2023 | 10.42.10.21 |
-| Application | EC2 Amazon Linux 2023 | 10.42.20.104 |
-| Données | RDS PostgreSQL | Sous-réseaux privés |
+### Architecture
 
-L'infrastructure comprend :
+```mermaid
+flowchart TB
+    Operator["Administrateur<br/>WSL2 · Terraform · Ansible"]
+    GitHub["GitHub Actions<br/>CI · Trivy · Ansible-lint"]
+    SSM["AWS Systems Manager"]
+    S3State[("S3<br/>Terraform remote state")]
+    Secrets["AWS Secrets Manager<br/>Secret administrateur RDS"]
 
-- quatre subnets : public, application et deux subnets de données ;
-- une Internet Gateway et une NAT Gateway ;
-- des tables de routage publique et privée ;
-- trois Security Groups aux flux restrictifs ;
-- deux instances EC2 administrées sans SSH via Systems Manager ;
-- des rôles IAM distincts pour management et application ;
-- un bucket S3 privé pour les transferts Ansible ;
-- un service Nginx conteneurisé sur management ;
-- une base PostgreSQL RDS privée et chiffrée ;
-- un secret RDS géré par AWS Secrets Manager ;
-- des journaux et métriques CloudWatch ;
-- une analyse Trivy automatisée avec GitHub Actions.
+    subgraph AWS["AWS eu-west-3 · VPC 10.42.0.0/16"]
+        direction TB
+        subgraph Public["Subnet public · 10.42.10.0/24"]
+            MGMT["EC2 Management<br/>Amazon Linux 2023<br/>Docker · Nginx · CloudWatch Agent"]
+            NAT["NAT Gateway"]
+        end
+        subgraph Application["Subnet privé applicatif · 10.42.20.0/24"]
+            APP["EC2 Application<br/>Flask · Gunicorn · systemd"]
+        end
+        subgraph Data["Subnets privés données · deux AZ"]
+            RDS[("RDS PostgreSQL<br/>Single-AZ · IAM DB Auth")]
+        end
+    end
 
-L'EC2 applicative n'a aucune adresse IPv4 publique.
-Le port PostgreSQL `5432` est autorisé depuis le
-Security Group applicatif uniquement.
+    Operator -->|"Terraform"| AWS
+    Operator -->|"Remote state"| S3State
+    Operator -->|"Ansible via SSM"| SSM
+    SSM -.-> MGMT
+    SSM -.-> APP
+    MGMT -->|"HTTP TCP 8080"| APP
+    APP -->|"PostgreSQL TCP 5432<br/>IAM · TLS verify-full"| RDS
+    APP -->|"HTTPS sortant"| NAT
+    RDS -.-> Secrets
+    GitHub -.->|"OIDC : identité STS uniquement"| AWS
+```
 
-La validation initiale par SSM utilisait provisoirement le compte maître RDS.
-Depuis, l'API a été migrée vers une authentification IAM en lecture seule
-avec TLS `verify-full`, sans autorisation de lecture du secret maître.
+**Segmentation :** quatre sous-réseaux, trois Security Groups, aucune règle entrante depuis Internet, EC2 applicative et RDS sans IP publique. L'EC2 management possède une IP publique pour ses accès sortants, mais aucun port entrant autorisé.
 
-![Connexion PostgreSQL validée](docs/screenshots/application-rds-postgresql-success.png)
+Le schéma est volontairement simplifié : voir [l'architecture détaillée](docs/architecture.md) pour les routes, règles réseau et composants IAM.
 
-Le service Flask/Gunicorn de la couche applicative est déployé avec Ansible et supervisé par systemd.
-Les endpoints `/health` et `/records` ont été testés depuis l'instance management et retournent des données de RDS.
-Le Nginx existant sur management reste un service de démonstration distinct.
+## Résultats techniques vérifiés
 
-### Documentation technique
-
-- [Architecture AWS](docs/architecture.md)
-- [Administration Ansible](docs/ansible.md)
-- [Conteneur Nginx](docs/container.md)
-- [CloudWatch](docs/monitoring.md)
-- [PostgreSQL et validation RDS](docs/database.md)
-- [Analyse Trivy et CI](docs/security-scanning.md)
-- [Décisions techniques](docs/decisions.md)
-- [Troubleshooting](docs/troubleshooting.md)
-- [Cycle de vie, sauvegarde et destruction AWS](docs/lifecycle.md)
-- [Incident Recovery — diagnostic et reprise automatisée](docs/incident-recovery.md)
-
-## Sécurité
-
-Les principaux contrôles actuellement appliqués sont :
-
-- authentification MFA pour l’utilisateur AWS du projet ;
-- politiques IAM dédiées aux opérations du projet ;
-- segmentation réseau en couches management, application et données ;
-- groupes de sécurité restrictifs utilisant des références entre groupes ;
-- absence de règle entrante ouverte sur Internet ;
-- administration par AWS Systems Manager Session Manager ;
-- métadonnées EC2 limitées à IMDSv2 ;
-- volume système chiffré ;
-- bucket de transfert Ansible chiffré, privé et nettoyé automatiquement ;
-- synchronisation temporelle avec `chronyd` ;
-- journalisation système avec `auditd` ;
-- authentification SSH par mot de passe et connexion directe de `root` désactivées ;
-- service Nginx lié uniquement à l’interface locale ;
-- contenu web monté en lecture seule dans le conteneur ;
-- validation automatique de la réponse HTTP ;
-- analyse des vulnérabilités de l’image avec Trivy ;
-- blocage du pipeline sur les vulnérabilités corrigibles `HIGH` ou `CRITICAL` ;
-- dépendances CI externes épinglées par SHA ou digest ;
-- centralisation des journaux système, d’audit et Docker dans CloudWatch ;
-- rétention des journaux CloudWatch limitée à sept jours ;
-- instance RDS privée avec stockage chiffré ;
-- application authentifiée à PostgreSQL via IAM, sans mot de passe applicatif permanent ;
-- utilisateur SQL `ironhaven_reader` en lecture seule ;
-- connexion PostgreSQL avec vérification TLS `verify-full` ;
-- accès au secret administrateur RDS refusé au rôle applicatif ;
-- gestion du secret maître RDS par Secrets Manager ; rotation périodique à vérifier ;
-- exclusion du state Terraform et des informations sensibles du dépôt Git.
-
-## Automatisation Ansible
-
-Les playbooks de base ci-dessous sont disponibles (ainsi que les playbooks applicatifs et PostgreSQL) :
-
-| Playbook | Fonction |
+| Domaine | Implémentation et résultat observé |
 |---|---|
-| `baseline.yml` | Mise à jour, outils d’administration, synchronisation temporelle, audit et durcissement SSH |
-| `container.yml` | Installation de Docker, construction et déploiement du service Nginx conteneurisé |
-| `monitoring.yml` | Installation et configuration de l’agent Amazon CloudWatch |
-
-Les trois playbooks ont été exécutés une seconde fois avec :
-
-```text
-changed=0
-unreachable=0
-failed=0
-```
+| Infrastructure as Code | VPC, EC2, NAT Gateway, RDS, IAM, S3, CloudWatch et alarmes provisionnés avec Terraform |
+| État Terraform | Backend S3 privé, versionné, chiffré et verrouillage natif configuré ; plan final sans dérive |
+| Administration Linux | Ansible via Session Manager, sans SSH entrant ni clé privée d'administration |
+| Automatisation | Configuration système et services via playbooks ; idempotence vérifiée sur les services testés |
+| Application | API Flask/Gunicorn privée, endpoints `/health` et `/records` vérifiés |
+| PostgreSQL | Connexion IAM avec `ironhaven_reader`, TLS `verify-full`, lecture autorisée et écriture refusée |
+| Secrets | Accès au secret administrateur refusé au rôle IAM applicatif |
+| Conteneur | Nginx sur Docker, accessible uniquement en loopback et via tunnel SSM |
+| Sécurité des conteneurs | Image Nginx corrigée ; aucune vulnérabilité *corrigible* HIGH/CRITICAL détectée selon la politique Trivy lors des tests |
+| Supervision | Logs management, métriques mémoire/disque et trois alarmes CloudWatch |
+| CI | Terraform `fmt`/`validate`, syntaxe YAML/Python, Trivy et Ansible-lint |
+| GitHub OIDC | Identité AWS temporaire vérifiée via STS, sans clé statique dans GitHub |
+| Incident Recovery | Arrêt contrôlé du service, diagnostic distant, récupération en 14 secondes d'exécution Ansible et vérification d'idempotence |
 
-Ce résultat confirme leur idempotence sur l’environnement déployé. Les collections nécessaires sont versionnées dans `ansible/requirements.yml`.
-
-## Supervision
-
-L’agent Amazon CloudWatch collecte :
-
-- les journaux d’initialisation de l’instance ;
-- les événements produits par `auditd` ;
-- les journaux du conteneur Docker ;
-- le pourcentage de mémoire utilisée ;
-- le pourcentage d’espace utilisé sur la partition racine.
-
-Les journaux sont répartis dans trois groupes CloudWatch gérés par Terraform. Les métriques sont publiées dans l’espace de noms `Ironhaven/Management`.
-
-![Validation des journaux et métriques CloudWatch](docs/screenshots/cloudwatch-monitoring-validation.png)
-
-## Sécurité des conteneurs
-
-L’image Nginx initiale contenait des vulnérabilités corrigibles de sévérité `HIGH` ou `CRITICAL`. Après mise à jour de l’image de base et application des correctifs Alpine pendant le build, Trivy ne détecte plus aucune vulnérabilité correspondant à cette politique.
-
-Le workflow GitHub Actions reconstruit et analyse l’image à chaque push et pull request vers `main`. Le job échoue automatiquement si une vulnérabilité corrigible `HIGH` ou `CRITICAL` est détectée.
-
-## Base de données
-
-Amazon RDS héberge une instance PostgreSQL dans deux sous-réseaux privés répartis sur deux zones de disponibilité. L’instance n’est pas publiquement accessible, son stockage est chiffré et ses journaux PostgreSQL sont exportés vers CloudWatch.
-
-Le mot de passe principal n’est ni défini dans Terraform ni stocké dans le dépôt. RDS le génère et le conserve dans Secrets Manager. La rotation automatique doit encore être vérifiée.
-
-![Validation de l’instance RDS PostgreSQL](docs/screenshots/rds-postgresql-validation.png)
-
-## Technologies
-
-### Actuellement utilisées
-
-- AWS
-- Terraform
-- Ansible
-- Docker
-- Nginx
-- PostgreSQL
-- Trivy
-- GitHub Actions
-- Amazon CloudWatch
-- Amazon RDS
-- AWS Secrets Manager
-- AWS IAM
-- AWS Systems Manager
-- Amazon EC2
-- Amazon S3
-- Amazon Linux 2023
-- Git et GitHub
-- WSL2 Ubuntu
-
-### Prévue
-
-- composant de sécurité pour agent IA
-
-## État du projet
-
-### Réalisé et validé
-
-- [x] Authentification AWS avec identifiants temporaires et MFA
-- [x] Provisionnement Terraform du VPC et des quatre subnets
-- [x] Internet Gateway, NAT Gateway et routage privé
-- [x] Security Groups restrictifs
-- [x] EC2 management et administration SSM
-- [x] Automatisation Ansible via SSM et bucket S3
-- [x] Durcissement Linux et configuration de base
-- [x] Docker et Nginx sur management
-- [x] Tests HTTP du service Nginx
-- [x] CloudWatch Logs et métriques système
-- [x] Analyse Trivy et remédiation des vulnérabilités
-- [x] Pipeline GitHub Actions de sécurité
-- [x] RDS PostgreSQL privée avec stockage chiffré
-- [x] Gestion du secret maître avec Secrets Manager
-- [x] EC2 applicative privée sans IP publique
-- [x] Rôle IAM applicatif dédié
-- [x] Connexion SSM sur l'EC2 applicative
-- [x] Résolution DNS et connectivité PostgreSQL TCP 5432
-- [x] Lecture historique du secret RDS depuis le rôle IAM applicatif (droit désormais révoqué)
-- [x] Connexion PostgreSQL et requête SQL réelle
-- [x] Capture de validation SQL publiée sur GitHub
-
-### À terminer
-
-- [x] Déployer le service HTTP dans la couche applicative
-- [x] Automatiser son déploiement avec Ansible
-- [x] Tester HTTP depuis management vers application
-- [x] Tester l'intégration HTTP vers PostgreSQL
-- [x] Collecter les preuves visuelles du flux applicatif et de la sécurité IAM
-- [ ] Vérifier la reconstruction complète ; le state S3 a déjà été migré et le plan final était sans dérive
-- [ ] Contrôler les coûts et nettoyer les ressources AWS
-
-L'extension expérimentale de sécurité pour agent IA
-reste hors du périmètre de livraison de cette V1.
-
-## Structure du dépôt
-
-```text
-.
-├── .github/
-│   └── workflows/
-│       └── container-security.yml
-├── ansible/
-│   ├── ansible.cfg
-│   ├── files/
-│   │   └── nginx/
-│   │       └── Dockerfile
-│   ├── inventory/
-│   │   └── hosts.yml
-│   ├── playbooks/
-│   │   ├── baseline.yml
-│   │   ├── container.yml
-│   │   └── monitoring.yml
-│   └── requirements.yml
-├── docs/
-│   ├── ansible.md
-│   ├── architecture.md
-│   ├── container.md
-│   ├── database.md
-│   ├── decisions.md
-│   ├── monitoring.md
-│   ├── security-scanning.md
-│   ├── troubleshooting.md
-│   └── screenshots/
-└── terraform/
-    ├── application.tf
-    ├── compute.tf
-    ├── database.tf
-    ├── iam.tf
-    ├── monitoring.tf
-    ├── network.tf
-    ├── outputs.tf
-    ├── provider.tf
-    ├── routing.tf
-    ├── security.tf
-    ├── storage.tf
-    ├── variables.tf
-    └── versions.tf
-```
-
-## Maîtrise des coûts
-
-L'environnement est temporaire et son coût est surveillé.
-
-- Les instances EC2 peuvent être arrêtées entre les sessions.
-- RDS peut être arrêtée temporairement, mais son stockage
-  et ses sauvegardes peuvent rester facturés.
-- La NAT Gateway est facturée tant qu'elle reste provisionnée,
-  même lorsque les instances sont arrêtées.
-- Les journaux CloudWatch sont conservés sept jours.
-- Les objets temporaires du bucket S3 expirent automatiquement.
-- Les fichiers `.tfstate`, `.tfvars` et `.tfplan`
-  sont exclus du dépôt Git.
-
-Une destruction contrôlée est prévue après les validations
-finales, sous réserve de sauvegarder les livrables utiles.
-
-## Avertissement
-
-Ce dépôt correspond à un environnement de laboratoire et de démonstration. Les ressources AWS sont temporaires et doivent être arrêtées ou détruites lorsqu’elles ne sont pas utilisées afin de limiter les coûts.
-
-## Démonstration de sécurité applicative
-
-L'application Flask est exécutée sur une EC2 privée et gérée
-par systemd. Elle utilise le rôle IAM de l'instance pour générer
-des jetons temporaires d'authentification PostgreSQL.
-
-La connexion RDS emploie `sslmode=verify-full` avec le bundle
-d'autorités de certification Amazon RDS. Le compte SQL
-`ironhaven_reader` n'a que le droit `SELECT` sur la table
-`public.ironhaven_components`.
-
-Le secret administrateur RDS reste géré par AWS Secrets Manager,
-mais le rôle IAM applicatif ne dispose plus de sa permission
-`secretsmanager:GetSecretValue`.
-
-### Validation du parcours complet
-
-![API privée : authentification IAM, TLS vérifié et données PostgreSQL](docs/screenshots/application-iam-tls-validation.png)
-
-### Lecture seule et vérification TLS
-
-![Test PostgreSQL : SELECT autorisé, écriture refusée et TLS 1.3](docs/screenshots/application-rds-readonly-validation.png)
-
-### Refus d'accès au secret administrateur
-
-![Contrôle IAM : refus d'accès au secret maître RDS](docs/screenshots/application-secret-access-denied.png)
-
-Les captures correspondent à des validations effectuées
-sur l'environnement AWS déployé. Le transport HTTP entre
-management et application reste interne au VPC et n'est
-pas chiffré au niveau applicatif ; le lien application-RDS
-est protégé par TLS avec vérification du certificat.
+**Important :** les 14 secondes correspondent à la durée d'exécution du playbook pendant un exercice unique, et non à un RTO garanti. La reprise du service arrêté a été testée avec la première version du playbook ; la version corrigée a été validée ensuite sur un service déjà actif.
 
-## Terraform Remote State — Amazon S3
+## Sécurité et décisions d'architecture
 
-L'état Terraform a été migré du stockage local vers un bucket
-Amazon S3 indépendant de l'infrastructure principale.
+### Réseau et accès
 
-- Région : `eu-west-3`
-- Chiffrement au repos : SSE-S3 (`AES256`)
-- Versioning S3 activé
-- Blocage complet des accès publics
-- Politique S3 refusant les connexions non HTTPS
-- Verrouillage natif Terraform : `use_lockfile = true`
-- Sauvegarde locale conservée hors dépôt avant migration
+Les flux applicatifs sont limités par référence entre Security Groups : management vers application sur TCP 8080, puis application vers PostgreSQL sur TCP 5432.
 
-La migration a été vérifiée avec `terraform plan` :
-**No changes — aucune dérive détectée.**
+L'accès administratif repose sur **AWS Systems Manager**, avec des rôles IAM EC2 dédiés. Aucun port SSH public n'est nécessaire.
 
-Le bucket de state est géré séparément afin qu'une destruction
-de l'infrastructure applicative ne supprime pas son propre état.
+La NAT Gateway permet les sorties HTTPS de la couche applicative privée. Les sous-réseaux de données ne disposent pas de route Internet par défaut configurée par le projet.
 
-### Sécurité du stockage
+### PostgreSQL : séparation des privilèges
 
-![Chiffrement S3, versioning et blocage des accès publics](docs/screenshots/terraform-remote-state-security.png)
+La première connexion SQL a été validée avec le compte administrateur RDS. La configuration finale de l'application utilise ensuite :
 
-### Validation de la migration
+- le compte PostgreSQL `ironhaven_reader` ;
+- une autorisation IAM `rds-db:connect` ciblée ;
+- un jeton d'authentification temporaire ;
+- TLS avec vérification du certificat et du nom du serveur ;
+- `SELECT` autorisé sur la table de démonstration ;
+- `INSERT`, `UPDATE` et `DELETE` refusés ;
+- aucun accès du rôle applicatif au secret administrateur.
 
-![State distant S3, configuration du backend et Terraform No changes](docs/screenshots/terraform-remote-state-validation.png)
+Le script Python [`bootstrap_database.py`](ansible/scripts/bootstrap_database.py) prépare et vérifie le schéma, les données et le compte lecteur par un tunnel SSM. Deux exécutions sur la base existante ont été validées.
 
-La configuration du backend est versionnée dans
-`terraform/backend.tf`. Le contenu réel du state,
-potentiellement sensible, reste exclu de Git.
+[Documentation PostgreSQL et preuves](docs/database.md)
 
-**Limite :** le verrouillage S3 est configuré ; un test
-explicite de concurrence reste à réaliser.
+### Risques identifiés et limites
 
-## CI/CD et authentification AWS OIDC
+Le contrôle Trivy IaC conserve quatre alertes connues : une `AWS-0164`, deux `AWS-0104` et une `AWS-0132`. Elles sont documentées et soumises à un contrôle bloquant des identifiants, fichiers et nombres d'occurrences. Ce mécanisme **n'élimine pas les risques** et ne garantit pas que chaque occurrence demeure à la même position dans le code.
 
-Ironhaven utilise quatre workflows GitHub Actions :
+Le laboratoire conserve plusieurs limites volontaires : RDS Single-AZ, HTTP interne sur le VPC, droits de déploiement temporairement étendus, versions d'AMI figées, et aucune reconstruction intégrale depuis un nouveau compte AWS testée.
 
-- **Container security** : construction de l'image Nginx et
-  analyse Trivy des vulnérabilités HIGH/CRITICAL corrigibles.
-- **Infrastructure CI** : contrôles Terraform (`fmt`, `validate`),
-  validation YAML Ansible et syntaxe Python.
-- **Infrastructure Security Audit** : analyse Terraform avec Trivy IaC et contrôle bloquant Ansible-lint, avec quatre exceptions HIGH/CRITICAL documentées.
-- **AWS OIDC Validation** : authentification fédérée auprès
-  d'AWS STS avec un jeton GitHub temporaire, sans clé AWS
-  permanente enregistrée dans GitHub.
+[Décisions techniques](docs/decisions.md) · [Analyses et exceptions de sécurité](docs/security-scanning.md)
 
-La politique de confiance IAM du rôle OIDC est restreinte
-au dépôt Ironhaven, à la branche `main` et à l'audience
-`sts.amazonaws.com`.
+## Automatisation, CI et exploitation
 
-Le rôle `ironhaven-github-oidc-validation` n'a aucune
-permission d'accès aux ressources AWS. Ce workflow
-valide exclusivement l'identité fédérée : il ne déploie
-aucune infrastructure.
+Six playbooks Ansible couvrent le durcissement système, Nginx/Docker, la supervision, l'application privée, les tests IAM PostgreSQL et la récupération applicative.
 
-### CI infrastructure validée
+Quatre workflows GitHub Actions sont présents :
 
-![GitHub Actions : contrôles Terraform et Ansible réussis](docs/screenshots/github-actions-infrastructure-ci.png)
+| Workflow | Fonction |
+|---|---|
+| [Infrastructure CI](.github/workflows/infrastructure-ci.yml) | Terraform format/validate, YAML, syntaxe Python et vérifications Git |
+| [Container Security](.github/workflows/container-security.yml) | Construction Nginx et contrôle Trivy bloquant |
+| [Infrastructure Security Audit](.github/workflows/infrastructure-security.yml) | Trivy Terraform IaC et Ansible-lint bloquants |
+| [AWS OIDC Validation](.github/workflows/github-oidc-validation.yml) | Authentification fédérée temporaire et validation d'identité STS |
 
-### Authentification AWS OIDC validée
+L'intégration OIDC valide une **authentification**, pas un déploiement automatique. Le rôle GitHub utilisé pour la démonstration ne possède pas de permission de provisionnement.
 
-![GitHub Actions : authentification OIDC temporaire réussie](docs/screenshots/github-actions-oidc-validation.png)
+Les contrôles CI statiques s'exécutent sans accès au compte AWS. L'authentification OIDC, elle, dépend du rôle AWS temporaire et cessera de fonctionner après sa suppression.
 
-**Limites :** ces validations ne constituent pas encore
-une chaîne de déploiement continu. Les tests Ansible
-portent ici sur les fichiers YAML et Python, et non sur
-une exécution réelle des playbooks en CI.
+[Administration Ansible](docs/ansible.md) · [Supervision CloudWatch](docs/monitoring.md)
 
-## Bootstrap PostgreSQL reproductible
+## Incident Recovery : diagnostic et restauration
 
-Le provisionnement SQL est désormais séparé du rôle IAM
-de l'application.
+Le 15 octobre 2026, le service `ironhaven-application` a été volontairement arrêté pour simuler une indisponibilité applicative.
 
-Un script local utilise un tunnel AWS Systems Manager vers
-RDS, récupère le secret maître avec l'identité administrative
-du poste WSL et configure le compte SQL `ironhaven_reader`.
+Les contrôles effectués via SSM ont identifié un service systemd inactif et une connexion HTTP impossible. Le playbook Ansible a démarré le service puis vérifié l'API, la connexion IAM PostgreSQL et la présence de trois enregistrements.
 
-Deux exécutions successives ont été validées sans duplication
-des données. Une reconstruction intégrale depuis zéro reste
-à vérifier.
+| Mesure | Résultat |
+|---|---|
+| Exécution du playbook de récupération | **14 secondes** |
+| Fin de validation après déclaration d'incident | 2 min 46 s, attente volontaire comprise |
+| Première exécution | `changed=1`, `failed=0` |
+| Second passage, service opérationnel | `changed=0`, `failed=0` |
+| Validation applicative | `/health` et `/records` opérationnels |
 
-![Validation du bootstrap PostgreSQL](docs/screenshots/database-bootstrap-reproducibility.png)
+Il s'agit d'une **reprise de service**, pas d'un plan de reprise après sinistre complet.
 
-## Surveillance et alarmes CloudWatch
+[Rapport d'incident et chronologie](docs/incident-recovery.md)
 
-En complément des journaux et métriques déjà collectés,
-Terraform déploie trois alarmes CloudWatch pour les CPU
-des deux EC2 et l'espace disque libre de RDS.
+### Preuves sélectionnées
 
-Les trois alarmes ont été observées à l'état `OK`.
-Une transition `OK → ALARM` a également été validée
-par simulation contrôlée avec `SetAlarmState`.
+| Architecture et accès | Application et base de données |
+|---|---|
+| ![Cartographie des ressources VPC](docs/screenshots/vpc-resource-map.png) | ![Connexion IAM et TLS PostgreSQL](docs/screenshots/application-iam-tls-validation.png) |
+| ![Vérification du remote state S3](docs/screenshots/terraform-remote-state-validation.png) | ![Accès au secret maître refusé](docs/screenshots/application-secret-access-denied.png) |
+| ![Contrôles GitHub Actions](docs/screenshots/github-actions-security-audit.png) | ![Restauration applicative Ansible](docs/screenshots/incident-recovery-restored.png) |
 
-![Alarmes CloudWatch](docs/screenshots/cloudwatch-alarms-overview.png)
+Les autres captures, les commandes de diagnostic et les résultats détaillés figurent dans les documents spécialisés.
 
-![Transition d'état simulée](docs/screenshots/cloudwatch-alarm-state-transition.png)
+## Documentation
 
-Voir [la documentation de supervision](docs/monitoring.md).
+| Document | Contenu |
+|---|---|
+| [Architecture](docs/architecture.md) | Réseau, EC2, routage, IAM et flux |
+| [Terraform et cycle de vie](docs/lifecycle.md) | Backend, state, sauvegarde et destruction |
+| [Ansible](docs/ansible.md) | SSM, durcissement, configuration et idempotence |
+| [Nginx / Docker](docs/container.md) | Image, déploiement et test HTTP |
+| [PostgreSQL](docs/database.md) | RDS, IAM, TLS, privilèges et bootstrap |
+| [Supervision](docs/monitoring.md) | CloudWatch Logs, métriques et alarmes |
+| [Sécurité](docs/security-scanning.md) | Trivy conteneur, Trivy IaC et Ansible-lint |
+| [Incident Recovery](docs/incident-recovery.md) | Scénario, chronologie, validations et limites |
+| [Troubleshooting](docs/troubleshooting.md) | Incidents réels de déploiement, causes et corrections |
+| [Décisions](docs/decisions.md) | Choix d'architecture et compromis |
 
-## Analyse IaC et qualité Ansible
+## Reproduction et cycle de vie
 
-Le workflow **Infrastructure Security Audit** complète
-les contrôles existants avec une analyse Terraform par
-Trivy et un contrôle de qualité des playbooks via Ansible-lint.
+Ce dépôt conserve la configuration Terraform, les playbooks, les scripts, les workflows et les preuves historiques.
 
-Les deux jobs sont bloquants. Quatre alertes IaC connues
-sont explicitement acceptées pour ce laboratoire et
-documentées avec leurs mesures de remédiation possibles.
+**Il ne constitue pas un déploiement en une commande sur un compte vierge.** Le backend S3, les identités et certaines dépendances IAM ont été préparés séparément. Les AMI et certains paramètres Ansible sont spécifiques au laboratoire initial.
 
-![Infrastructure Security Audit validé](docs/screenshots/github-actions-security-audit.png)
+Une reproduction nécessiterait d'adapter la configuration au compte cible, d'initialiser son backend, de provisionner les ressources, de préparer l'inventaire Ansible, puis d'exécuter le bootstrap PostgreSQL et les playbooks dans le bon ordre.
 
-Voir [les règles et exceptions documentées](docs/security-scanning.md).
+Le state Terraform réel reste **hors du dépôt GitHub**. La destruction de l'infrastructure et des ressources manuelles sera consignée dans [lifecycle.md](docs/lifecycle.md).
 
-## Incident Recovery — reprise après incident
+## Méthodologie et assistance IA
 
-Un exercice contrôlé a simulé l'arrêt du service Flask/Gunicorn
-sur l'EC2 applicative privée.
+Ce projet a été réalisé avec une assistance substantielle de **ChatGPT**, notamment pour la conception et la rédaction des scripts, les configurations Terraform et Ansible, le diagnostic des erreurs et la structuration documentaire.
 
-La panne a été constatée via SSM (`systemd` inactif, échec HTTP),
-puis le service restauré par Ansible. Les endpoints `/health`
-et `/records` ont validé la connexion PostgreSQL avec IAM et TLS.
+L'infrastructure a été déployée sur AWS et les procédures techniques ont été exécutées et vérifiées au cours du projet. Les résultats confirmés, les limites et les choix techniques sont documentés dans le dépôt.
 
-**Résultats :** récupération Ansible en 14 secondes,
-3 enregistrements SQL disponibles, puis seconde exécution
-idempotente (`changed=0`, `failed=0`).
-
-Ces mesures correspondent à un test unique, et non à un RTO garanti.
-
-![Reprise du service applicatif](docs/screenshots/incident-recovery-restored.png)
-
-[Lire le rapport d'incident complet](docs/incident-recovery.md).
+L'objectif est de développer des compétences opérationnelles en administration systèmes, automatisation, réseau, sécurité et cloud, en associant pratique réelle, documentation et outils d'assistance.
