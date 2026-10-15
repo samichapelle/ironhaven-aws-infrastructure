@@ -180,10 +180,10 @@ Une reproduction nécessiterait d'adapter la configuration au compte cible, d'in
 
 Le state Terraform réel reste **hors du dépôt GitHub**. La destruction de l'infrastructure et des ressources manuelles sera consignée dans [lifecycle.md](docs/lifecycle.md).
 
-## Méthodologie et assistance IA
+## Méthodologie et outils
 
-Ce projet a été réalisé avec une assistance substantielle de **ChatGPT**, notamment pour la conception et la rédaction des scripts, les configurations Terraform et Ansible, le diagnostic des erreurs et la structuration documentaire.
+Ironhaven est un projet personnel d'apprentissage et de mise en pratique, construit autour d'un environnement AWS réel.
 
-L'infrastructure a été déployée sur AWS et les procédures techniques ont été exécutées et vérifiées au cours du projet. Les résultats confirmés, les limites et les choix techniques sont documentés dans le dépôt.
+Sa réalisation s'est appuyée sur la documentation technique, des outils d'assistance IA et une démarche itérative de déploiement, de diagnostic et de validation.
 
-L'objectif est de développer des compétences opérationnelles en administration systèmes, automatisation, réseau, sécurité et cloud, en associant pratique réelle, documentation et outils d'assistance.
+Les choix d'architecture, les difficultés rencontrées, les tests effectués et les limites du projet sont documentés afin de présenter une expérience technique concrète et reproductible dans la mesure du possible.
