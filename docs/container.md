@@ -143,7 +143,13 @@ La sortie confirme :
 - la liaison locale `127.0.0.1:8080->80/tcp` ;
 - la présence du contenu Ironhaven.
 
-![Validation du conteneur Nginx](screenshots/docker-nginx-validation.png)
+![Premier déploiement du conteneur Nginx](screenshots/docker-nginx-validation.png)
+
+**Capture historique :** cette vérification montre l'image
+initiale `nginx:1.27-alpine`. Elle démontre le fonctionnement
+du conteneur et de son accès local avant le durcissement
+de l'image. Le résultat du scan de l'image corrigée est
+documenté dans [security-scanning.md](security-scanning.md).
 
 ## Accès avec un tunnel SSM
 

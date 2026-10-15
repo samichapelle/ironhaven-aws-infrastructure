@@ -49,6 +49,11 @@ Le subnet public possède une route par défaut
 
 ![Routage public](screenshots/public-route-table.png)
 
+La capture de cartographie VPC conservée dans le dépôt
+(`screenshots/vpc-resource-map.png`) correspond à une étape
+historique avec trois sous-réseaux. L'architecture finale
+comporte quatre sous-réseaux, conformément au code Terraform.
+
 Le subnet applicatif possède une table de routage dédiée,
 avec une route par défaut vers la NAT Gateway.
 

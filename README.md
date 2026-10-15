@@ -143,9 +143,9 @@ Il s'agit d'une **reprise de service**, pas d'un plan de reprise après sinistre
 
 ### Preuves sélectionnées
 
-**Architecture réseau et segmentation**
+**Segmentation réseau — trois Security Groups**
 
-![Cartographie VPC AWS](docs/screenshots/vpc-resource-map.png)
+![Security Groups management, application et données](docs/screenshots/security-groups.png)
 
 **Récupération d'un service applicatif via Ansible et SSM**
 
