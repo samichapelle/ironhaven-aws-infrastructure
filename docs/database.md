@@ -24,7 +24,7 @@ La couche de données comprend :
 | Base initiale | `ironhaven` |
 | Port | `5432/TCP` |
 | Stockage | `20 GiB` GP3, extensible jusqu’à `30 GiB` |
-| Chiffrement | Activé au repos avec AWS KMS |
+| Chiffrement | activé au repos via AWS KMS ; clé gérée par le client non configurée explicitement |
 | Accès public | Désactivé |
 | Déploiement | Single-AZ |
 | Sauvegardes automatiques | Conservation pendant un jour |
@@ -80,7 +80,15 @@ Les paramètres de laboratoire facilitent également une destruction contrôlée
 - snapshot final désactivé ;
 - suppression des sauvegardes automatisées lors de la destruction.
 
-Ces choix sont adaptés à une infrastructure temporaire. Ils devraient être renforcés dans un environnement de production avec une protection contre la suppression, une politique de sauvegarde plus longue et un snapshot final obligatoire.
+Ces paramètres facilitent la suppression d'un laboratoire
+temporaire, mais impliquent une **perte définitive des données
+RDS au moment du `terraform destroy`**, en l'absence d'un
+export ou snapshot conservé séparément.
+
+Le fichier de state Terraform sauvegardé ne constitue
+pas une sauvegarde des enregistrements PostgreSQL.
+En production, les protections et les procédures de
+sauvegarde/restauration devraient être renforcées.
 
 ## Validation
 
@@ -91,7 +99,7 @@ le chiffrement, l'absence d'accès public et le secret maître.
 
 ![Validation RDS](screenshots/rds-postgresql-validation.png)
 
-### Validation applicative du 14 octobre 2026
+### Première validation SQL du 14 octobre 2026 — historique
 
 Une EC2 Amazon Linux 2023 a été créée dans
 le subnet `10.42.20.0/24` avec l'adresse `10.42.20.104`.
@@ -135,16 +143,17 @@ Une seconde validation a confirmé PostgreSQL 18.3.
 Le secret a été récupéré grâce au rôle IAM de l'EC2,
 sans affichage du mot de passe.
 
-Le mode TLS `require` chiffre la connexion, mais ne
-vérifie pas intégralement le certificat du serveur.
-Le mode `verify-full` serait préférable en production.
+Cette première vérification utilisait le compte maître
+RDS et `sslmode=require` : la connexion était chiffrée,
+mais la vérification complète de l'identité du serveur
+n'était pas démontrée.
 
-Ce test utilise le compte maître RDS. Un utilisateur
-SQL applicatif dédié, avec des droits limités,
-a depuis été créé ; le service HTTP Flask utilise `ironhaven_reader` avec IAM.
-
-Cette validation prouve une connexion SQL effective,
-pas encore un service applicatif HTTP intégré.
+**Configuration finale :** l'application Flask/Gunicorn
+utilise désormais `ironhaven_reader`, l'authentification IAM
+et `sslmode=verify-full`. Les contrôles TLS et les tests de
+lecture seule figurent dans la section de durcissement
+ci-dessous. La première validation SQL reste conservée
+comme étape historique du projet.
 
 ## Exploitation temporaire
 
@@ -167,20 +176,30 @@ AWS_PROFILE=ironhaven aws rds wait db-instance-available \
 
 L’arrêt conserve le stockage, les données, la configuration et l’endpoint. Le stockage et les sauvegardes restent facturés, et AWS redémarre automatiquement une instance arrêtée après sept jours consécutifs.
 
-## Limites et évolution
+## Limites de l'environnement de laboratoire
 
-Cette implémentation constitue une base de démonstration sécurisée, mais plusieurs améliorations seraient nécessaires en production :
+Les contrôles IAM `rds-db:connect`, TLS `verify-full`
+et la lecture PostgreSQL via Flask/Gunicorn sont
+**implémentés et validés**.
 
-- déploiement Multi-AZ ;
-- conservation plus longue des sauvegardes ;
+Trois alarmes CloudWatch ont également été déployées,
+dont une portant sur l'espace de stockage disponible
+de RDS. Une transition d'état a été simulée ; aucun
+incident réel de saturation du stockage n'a été testé.
+
+Les améliorations suivantes restent hors du périmètre
+de la V1 :
+
+- déploiement et basculement RDS Multi-AZ ;
+- conservation prolongée des sauvegardes ;
 - protection contre la suppression ;
-- clé KMS gérée par le client ;
-- surveillance et alarmes dédiées à RDS ;
-- rôle IAM applicatif limité à `rds-db:connect` (validé) ;
-- authentification TLS vérifiée côté client (`verify-full`, validée) ;
-- tests réguliers de restauration.
+- clé KMS gérée explicitement par le client ;
+- tests de restauration depuis une sauvegarde ;
+- terminaison HTTPS interne de l'API ;
+- validation d'une reconstruction intégrale depuis zéro.
 
-Cette étape a depuis été réalisée : Flask/Gunicorn est déployé sur l'EC2 privée, et l'endpoint `/records` effectue une lecture réelle de PostgreSQL avec authentification IAM et TLS vérifié.
+Ces limites sont celles d'un laboratoire temporaire et
+ne constituent pas des recommandations de production.
 
 ## Durcissement final : authentification IAM et lecture seule
 

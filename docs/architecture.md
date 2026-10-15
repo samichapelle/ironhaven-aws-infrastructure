@@ -160,14 +160,16 @@ Le bucket ne constitue pas un stockage applicatif. Il sert uniquement aux transf
 
 ## Base de données PostgreSQL
 
-Amazon RDS héberge PostgreSQL dans la couche de données. Le groupe de sous-réseaux RDS utilise les deux sous-réseaux privés de données répartis entre `eu-west-3a` et `eu-west-3b`.
+Amazon RDS héberge PostgreSQL dans la couche de données. Le groupe de sous-réseaux RDS utilise deux sous-réseaux privés répartis entre `eu-west-3a` et `eu-west-3b`.
+
+**Disponibilité :** l'instance reste configurée en `Single-AZ` (`multi_az = false`). La répartition des sous-réseaux ne constitue pas un déploiement RDS Multi-AZ et aucun basculement automatique n'a été testé.
 
 | Paramètre | Valeur |
 |---|---|
 | Identifiant | `ironhaven-postgresql` |
 | Classe | `db.t4g.micro` |
 | Stockage | 20 Gio GP3, extensible jusqu’à 30 Gio |
-| Chiffrement | activé avec AWS KMS |
+| Chiffrement | activé au repos via AWS KMS ; clé gérée par le client non configurée explicitement |
 | Accès public | désactivé |
 | Déploiement | Single-AZ |
 | Sauvegardes | conservation pendant un jour |
@@ -189,7 +191,20 @@ Terraform crée trois groupes CloudWatch Logs avec une rétention de sept jours 
 - `/ironhaven/management/audit` ;
 - `/ironhaven/management/containers`.
 
-L’agent CloudWatch publie également les métriques mémoire et disque dans l’espace de noms `Ironhaven/Management`. RDS exporte ses journaux PostgreSQL et de mise à niveau vers CloudWatch.
+L'agent CloudWatch publie également les métriques mémoire et disque **de l'instance management** dans l'espace de noms `Ironhaven/Management`. RDS exporte ses journaux PostgreSQL et de mise à niveau vers CloudWatch.
+
+Trois alarmes Terraform ont été créées et observées à l'état `OK` :
+
+- CPU élevé sur l'EC2 management ;
+- CPU élevé sur l'EC2 application ;
+- stockage disponible RDS inférieur à 2 Gio.
+
+Une transition d'état a été simulée via `SetAlarmState`.
+Ce test confirme la modification et la consultation de l'état
+d'une alarme, **pas un dépassement réel de seuil ni une
+notification automatique**.
+
+Détails et preuves : [monitoring.md](monitoring.md).
 
 ## IAM
 
@@ -241,7 +256,7 @@ L’architecture applique actuellement les principes suivants :
 - infrastructure reproductible avec Terraform ;
 - exclusion du state Terraform et des informations sensibles du dépôt Git.
 
-## État actuel
+## État déployé et validé — octobre 2026
 
 ### Déployé et testé
 
@@ -259,12 +274,6 @@ L’architecture applique actuellement les principes suivants :
 - connexion SQL réelle depuis application.
 
 ![Validation SQL](screenshots/application-rds-postgresql-success.png)
-
-### À finaliser
-
-- centralisation des journaux applicatifs ;
-- alarmes et simulation d'incident ;
-- captures et validation finale.
 
 ## Validation finale du flux applicatif
 
