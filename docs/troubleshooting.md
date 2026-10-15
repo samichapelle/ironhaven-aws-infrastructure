@@ -4,6 +4,25 @@ Ce document recense uniquement les incidents techniques ayant bloqué le déploi
 
 Les erreurs mineures liées au poste de travail, à l’interface ou à la saisie ne sont pas conservées.
 
+## Index des incidents
+
+| Domaine | Incident | Section |
+|---|---|---|
+| IAM / Terraform | Création des Security Groups refusée | [Diagnostic IAM initial](#politique-iam-insuffisante-pour-le-déploiement-réseau) |
+| AWS / Réseau | Elastic IP refusée | [Incidents des 13–14 octobre](#incidents-du-1314-octobre-2026) |
+| Terraform | Remplacement inattendu d'EC2 | [Incidents des 13–14 octobre](#incidents-du-1314-octobre-2026) |
+| Terraform / IAM | Rafraîchissement du state bloqué | [Incidents des 13–14 octobre](#incidents-du-1314-octobre-2026) |
+| IAM | Tagging de l'instance profile refusé | [Incidents des 13–14 octobre](#incidents-du-1314-octobre-2026) |
+| SSM | Accès CLI refusé | [Incidents des 13–14 octobre](#incidents-du-1314-octobre-2026) |
+| PostgreSQL | Premier contrôle de connexion TLS | [Incidents des 13–14 octobre](#incidents-du-1314-octobre-2026) |
+| PostgreSQL / SSM | Bootstrap et permissions SQL | [Bootstrap](#bootstrap-postgresql-et-séparation-des-privilèges) |
+| CI / Ansible | Contrôle Ansible-lint bloquant | [Ansible-lint](#échec-ansible-lint-sur-le-playbook-de-récupération) |
+| CI / Réseau | Délai d'attente Ansible Galaxy | [Galaxy](#échec-de-téléchargement-de-collections-ansible-galaxy) |
+| IaC / Sécurité | Gestion des exceptions Trivy | [Trivy](#gestion-des-alertes-trivy-iac) |
+
+Pour la panne applicative provoquée et sa récupération, voir
+[Incident Recovery](incident-recovery.md).
+
 ## Politique IAM insuffisante pour le déploiement réseau
 
 ### Contexte
@@ -211,3 +230,219 @@ Le second test a utilisé une chaîne de connexion valide.
 
 **Résultat :** connexion PostgreSQL confirmée,
 avec chiffrement TLS demandé.
+
+## Bootstrap PostgreSQL et séparation des privilèges
+
+### Contexte
+
+L'application Flask/Gunicorn est hébergée sur une EC2 privée.
+Elle utilise une instance RDS PostgreSQL privée, sans accès
+direct depuis Internet.
+
+Le compte SQL applicatif `ironhaven_reader` doit disposer
+de la lecture seule, sans accès au secret administrateur.
+
+### Difficulté technique
+
+Le provisionnement initial du schéma SQL et du lecteur
+nécessite des privilèges différents de ceux accordés à
+l'application en exploitation.
+
+Une simple création de ressources Terraform ne suffit pas
+à créer ces objets à l'intérieur de PostgreSQL.
+
+### Solution retenue
+
+Le script local `ansible/scripts/bootstrap_database.py` :
+
+1. récupère les métadonnées via les outputs Terraform ;
+2. lit le secret administrateur RDS via les autorisations du
+   profil AWS utilisé sur le poste de contrôle ;
+3. établit un tunnel Systems Manager vers RDS en passant
+   par l'instance applicative privée ;
+4. vérifie le certificat TLS avec `sslmode=verify-full` ;
+5. crée si nécessaire la table et les trois données de
+   démonstration ;
+6. crée si nécessaire `ironhaven_reader` et lui attribue
+   les permissions SQL limitées à la lecture ;
+7. vérifie explicitement les droits `SELECT`, `INSERT`,
+   `UPDATE` et `DELETE`.
+
+Le rôle IAM de l'instance applicative autorise uniquement
+la connexion à RDS sous l'identité `ironhaven_reader`.
+Il ne détient plus de permission de lecture du secret maître.
+
+### Validation et limites
+
+Le bootstrap a été exécuté deux fois avec succès sur
+l'environnement existant. Les contrôles ont confirmé
+la présence des trois enregistrements et les restrictions
+SQL du lecteur.
+
+Le fonctionnement applicatif a également été validé
+avec authentification IAM et TLS `verify-full`.
+
+Ces tests établissent l'idempotence observée du bootstrap
+dans cet environnement, mais ne constituent pas une preuve
+de reconstruction intégrale depuis un compte AWS vierge.
+
+**Documentation :** [PostgreSQL](database.md),
+[Architecture](architecture.md).
+
+## Échec Ansible-lint sur le playbook de récupération
+
+### Contexte
+
+Après l'exercice de récupération applicative du
+15 octobre 2026, le playbook
+`ansible/playbooks/incident-recovery.yml`
+a été ajouté à l'analyse de qualité GitHub Actions.
+
+### Symptôme
+
+Le job `Ansible | Quality Audit` a échoué sur la règle
+`command-instead-of-module`.
+
+La première version utilisait une commande
+`systemctl is-active` pour inspecter le service.
+
+### Diagnostic et correction
+
+La commande était fonctionnelle dans le laboratoire,
+mais Ansible-lint recommandait d'utiliser un module Ansible
+approprié plutôt qu'une commande système directe.
+
+Le contrôle a été remplacé par `ansible.builtin.service_facts`.
+L'action de démarrage reste assurée par
+`ansible.builtin.systemd_service`.
+
+### Validation
+
+Le workflow `Infrastructure Security Audit` du commit
+`06bd90e` a terminé ses deux jobs avec succès.
+
+La version corrigée du playbook a également été exécutée
+contre le service déjà actif :
+
+- état initial : `running` ;
+- service maintenu sans redémarrage ;
+- `/health` sain et PostgreSQL connecté ;
+- trois enregistrements accessibles ;
+- `changed=0`, `failed=0`, `unreachable=0`.
+
+**Limite importante :** la récupération réelle d'un service
+arrêté a été démontrée avec la version précédente du
+playbook. La version corrigée a été validée en idempotence
+sur un service déjà actif.
+
+**Rapport complet :**
+[Incident Recovery](incident-recovery.md).
+
+## Échec de téléchargement de collections Ansible Galaxy
+
+### Contexte
+
+Lors de l'exécution GitHub Actions du commit `3eb9f74`,
+le job de contrôle qualité Ansible a échoué pendant
+l'installation des collections.
+
+### Symptôme
+
+Le journal affichait notamment :
+
+```text
+Failed to download collection tar from 'default'
+<urlopen error _ssl.c:983: The handshake operation timed out>
+```
+
+Les collections `amazon.aws` et `community.docker` avaient
+été installées avec succès avant l'échec du téléchargement
+de `community.general`.
+
+### Diagnostic
+
+L'échec s'est produit dans l'étape
+`Install Ansible collections`, avant le lancement
+d'Ansible-lint.
+
+Il ne constitue donc pas la preuve d'une erreur dans
+les playbooks ni d'un échec de validation Ansible-lint.
+
+### Remédiation appliquée
+
+L'étape d'installation Ansible Galaxy a été renforcée
+dans `.github/workflows/infrastructure-security.yml` :
+
+- trois tentatives au maximum ;
+- délai réseau porté à 120 secondes par tentative ;
+- attente de 15 secondes entre les tentatives ;
+- échec du job si aucune tentative ne réussit.
+
+Le contrôle Ansible-lint reste obligatoire : la correction
+ne supprime ni le scan ni son caractère bloquant.
+
+### Validation
+
+Le commit `c27d905` a été exécuté avec succès dans
+GitHub Actions :
+
+- `Trivy | Terraform IaC Audit` : succès ;
+- `Ansible | Quality Audit` : succès ;
+- durée totale du workflow : 3 min 44 s.
+
+La capture GitHub Actions confirme la réussite du workflow.
+Elle ne démontre pas à elle seule qu'une nouvelle tentative
+a été nécessaire pendant cette exécution.
+
+Ne pas présenter cette panne réseau comme un défaut
+du code applicatif.
+
+## Gestion des alertes Trivy IaC
+
+### Contexte
+
+Le workflow `Infrastructure Security Audit` analyse
+les fichiers Terraform avec Trivy en sévérité
+`HIGH` et `CRITICAL`.
+
+### Constats documentés
+
+Quatre alertes connues sont conservées dans le périmètre
+de laboratoire :
+
+- `AWS-0164`, une occurrence dans `network.tf` ;
+- `AWS-0104`, deux occurrences dans `security.tf` ;
+- `AWS-0132`, une occurrence dans `storage.tf`.
+
+Elles correspondent respectivement à l'attribution
+automatique d'IP publiques, à certaines règles de
+sortie réseau et au mode de chiffrement d'un bucket S3.
+
+### Décision
+
+Les risques n'ont pas été silencieusement ignorés.
+Une politique explicite compare les alertes détectées
+à une liste de référence documentée.
+
+Le commit `3eb9f74` renforce cette politique en exigeant
+les cardinalités exactes : une, deux et une occurrences.
+
+Le contrôle échoue si une alerte inattendue apparaît
+ou si le nombre d'occurrences attendues change.
+
+### Limites
+
+La comparaison repose sur l'identifiant de règle, le
+fichier et le nombre d'occurrences. Elle ne vérifie
+pas l'emplacement exact de chaque règle Terraform.
+
+Une alerte identique pourrait remplacer une ancienne
+occurrence sans être distinguée par le contrôle.
+
+Le scan ne constitue pas non plus un audit complet
+de sécurité cloud. Les exceptions restent spécifiques
+à ce laboratoire et ne sont pas des recommandations
+pour un environnement de production.
+
+**Détail de chaque exception :**
+[Analyses de sécurité](security-scanning.md).
