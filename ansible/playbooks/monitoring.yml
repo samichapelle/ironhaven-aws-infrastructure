@@ -117,3 +117,4 @@
           -m ec2
           -s
           -c file:{{ cloudwatch_agent_config_path }}
+      changed_when: true

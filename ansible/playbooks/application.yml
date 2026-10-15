@@ -43,7 +43,7 @@
 
     - name: Copy Flask application
       ansible.builtin.copy:
-        src: ../files/application/app.py
+        src: "{{ playbook_dir }}/../files/application/app.py"
         dest: "{{ app_root }}/app.py"
         owner: "{{ app_user }}"
         group: "{{ app_user }}"
@@ -52,7 +52,7 @@
 
     - name: Copy Python requirements
       ansible.builtin.copy:
-        src: ../files/application/requirements.txt
+        src: "{{ playbook_dir }}/../files/application/requirements.txt"
         dest: "{{ app_root }}/requirements.txt"
         owner: "{{ app_user }}"
         group: "{{ app_user }}"

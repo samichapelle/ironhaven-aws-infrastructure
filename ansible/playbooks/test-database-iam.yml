@@ -26,7 +26,7 @@
 
     - name: Copy IAM database verification script
       ansible.builtin.copy:
-        src: ../files/database/test_iam_reader.py
+        src: "{{ playbook_dir }}/../files/database/test_iam_reader.py"
         dest: "{{ app_root }}/test_iam_reader.py"
         owner: ironhaven-app
         group: ironhaven-app
@@ -35,6 +35,7 @@
     - name: Test IAM token, TLS and denied SQL write
       ansible.builtin.command:
         cmd: "{{ app_root }}/venv/bin/python {{ app_root }}/test_iam_reader.py"
+      become: true
       become_user: ironhaven-app
       environment:
         AWS_REGION: eu-west-3
