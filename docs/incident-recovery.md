@@ -147,3 +147,22 @@ inutilement pendant ce second passage.
 
 Cet exercice valide une reprise de service applicatif,
 pas un plan complet de reprise après sinistre.
+
+## Validation finale du playbook corrigé
+
+Après le premier exercice, le contrôle de l'état systemd
+a été remplacé par le module natif Ansible `service_facts`
+pour respecter les règles d'Ansible-lint.
+
+Une nouvelle exécution sur l'instance applicative a confirmé :
+
+- état initial : `running` (valeur retournée par `service_facts`) ;
+- service conservé en fonctionnement, sans redémarrage ;
+- API `/health` : `healthy` ;
+- PostgreSQL : `connected`, utilisateur `ironhaven_reader` ;
+- `/records` : 3 enregistrements ;
+- Ansible : `ok=8`, `changed=0`, `failed=0`, `unreachable=0`.
+
+Cette validation confirme l'idempotence de la version corrigée.
+La reprise depuis un état arrêté avait été validée avec
+la version précédente du playbook.
