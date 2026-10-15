@@ -45,30 +45,82 @@ pas un artefact GitHub.
 
 Le fichier peut contenir des valeurs sensibles et doit
 rester privé. Une copie chiffrée sur un support indépendant
-est recommandée avant la fermeture définitive du compte.
+reste recommandée pour l'archivage privé.
 
-## Destruction : à exécuter après les dernières démonstrations
+## Destruction et clôture — 15 octobre 2026
 
-1. Conserver captures, logs de validation et commits GitHub.
-2. Examiner `terraform plan -destroy` avant toute action.
-3. Vérifier les conséquences sur PostgreSQL :
-   absence possible de snapshot final selon la configuration.
-4. N'exécuter `terraform destroy` qu'après accord explicite.
-5. Contrôler les ressources résiduelles hors Terraform :
-   bucket S3 du state et toutes ses versions,
-   objets temporaires, identités et politiques IAM manuelles,
-   intégration OIDC, éventuels snapshots et secrets.
-6. Vérifier les autres régions AWS éventuellement utilisées.
-7. Contrôler Billing/Cost Explorer et l'état du forfait.
-8. Envisager ensuite la fermeture du compte via AWS Console.
+Le démantèlement du laboratoire a été exécuté après les
+validations techniques et la publication du tag `v1.0.0`.
 
-Cette liste décrit une procédure prévue. Elle ne prétend
-pas que la destruction ou la fermeture est déjà effectuée.
+### Résultat Terraform
 
-**Important :** le backend S3 est indépendant du Terraform
-principal. Ne supprimer son bucket qu'après la destruction
-et les vérifications finales ; la sauvegarde locale doit
-être conservée en lieu sûr.
+Un plan de destruction a été vérifié avant exécution :
+
+- `0` ressource à créer ;
+- `0` ressource à modifier ;
+- `47` ressources à détruire.
+
+L'exécution du plan s'est terminée par :
+
+```text
+Apply complete! Resources: 0 added, 0 changed, 47 destroyed.
+```
+
+La commande `terraform state list` n'a ensuite retourné
+aucune ressource.
+
+Les deux instances EC2, RDS PostgreSQL, la NAT Gateway,
+l'Elastic IP, les sous-réseaux et le VPC ont été supprimés.
+Aucun snapshot RDS final n'a été conservé.
+
+![Destruction Terraform validée](screenshots/terraform-destroy-completed.png)
+
+### Nettoyage complémentaire hors Terraform
+
+Les opérations suivantes ont été réalisées et vérifiées :
+
+- suppression du bucket S3 de state distant, après suppression
+  de ses 15 versions et 9 marqueurs de suppression ;
+- suppression des quatre groupes CloudWatch Logs résiduels,
+  dont trois provenant de l'ancien laboratoire Drakonis ;
+- suppression du rôle IAM de validation GitHub OIDC et
+  du fournisseur d'identité associé ;
+- vérification de l'absence de buckets S3 restants ;
+- inventaire de 17 régions AWS : aucune ressource active
+  trouvée dans les catégories EC2, EBS, Elastic IP,
+  NAT Gateway, RDS, CloudWatch Logs et Secrets Manager
+  interrogées.
+
+Cet inventaire ne constitue pas une vérification exhaustive
+de l'ensemble des services AWS existants.
+
+### Vérifications financières
+
+La console Billing affichait une facture estimée à
+`0,00 USD` pour octobre 2026, couverte par le plan gratuit.
+Ce montant était provisoire et ne prouve pas une absence
+totale de consommation.
+
+Les écrans consultés montraient :
+
+- zéro Savings Plan ;
+- aucune instance EC2 réservée dans la région vérifiée ;
+- zéro abonnement AWS Marketplace actif.
+
+Le compte AWS a été **conservé ouvert** pour d'éventuels
+projets futurs. La fermeture du compte n'a pas été effectuée.
+
+### Conservation des preuves
+
+Le dépôt GitHub, le tag `v1.0.0`, les scripts et les
+captures sont conservés.
+
+Le state Terraform historique et le journal de destruction
+restent en dehors du dépôt public, sur le poste WSL.
+
+Le workflow GitHub OIDC est conservé comme démonstration
+historique : son rôle et son fournisseur d'identité AWS
+n'existent plus.
 
 ## Limites
 

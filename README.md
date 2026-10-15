@@ -4,7 +4,7 @@
 
 **Stack :** AWS · Terraform · Ansible · Linux · Docker · PostgreSQL · Python · GitHub Actions · Trivy
 
-> **Statut :** V1 fonctionnelle et validée en octobre 2026. Laboratoire temporaire destiné à être détruit après les validations finales. Les résultats présentés correspondent aux tests réalisés, et non à un service de production permanent.
+> **Statut :** V1.0.0 déployée et validée sur AWS, puis infrastructure démontée le **15 octobre 2026**. Compte AWS conservé, code et preuves archivés. Les résultats présentés correspondent aux tests historiques, pas à un service en production.
 
 ## Vue d'ensemble
 
@@ -119,7 +119,7 @@ Quatre workflows GitHub Actions sont présents :
 
 L'intégration OIDC valide une **authentification**, pas un déploiement automatique. Le rôle GitHub utilisé pour la démonstration ne possède pas de permission de provisionnement.
 
-Les contrôles CI statiques s'exécutent sans accès au compte AWS. L'authentification OIDC, elle, dépend du rôle AWS temporaire et cessera de fonctionner après sa suppression.
+Les contrôles CI statiques s'exécutent sans accès au compte AWS. La validation OIDC a été réalisée pendant la phase de laboratoire. Le rôle IAM et le fournisseur d'identité AWS ont été supprimés le 15 octobre 2026 : ce workflow est désormais conservé comme exemple historique et ne peut plus s'authentifier sans recréer ses dépendances.
 
 [Administration Ansible](docs/ansible.md) · [Supervision CloudWatch](docs/monitoring.md)
 
@@ -155,6 +155,11 @@ Il s'agit d'une **reprise de service**, pas d'un plan de reprise après sinistre
 
 Les autres preuves et leurs contextes figurent dans les documents techniques.
 
+**Démantèlement Terraform — 47 ressources supprimées**
+
+![Terraform destroy : 47 ressources supprimées](docs/screenshots/terraform-destroy-completed.png)
+
+
 ## Documentation
 
 | Document | Contenu |
@@ -178,7 +183,7 @@ Ce dépôt conserve la configuration Terraform, les playbooks, les scripts, les 
 
 Une reproduction nécessiterait d'adapter la configuration au compte cible, d'initialiser son backend, de provisionner les ressources, de préparer l'inventaire Ansible, puis d'exécuter le bootstrap PostgreSQL et les playbooks dans le bon ordre.
 
-Le state Terraform réel reste **hors du dépôt GitHub**. La destruction de l'infrastructure et des ressources manuelles sera consignée dans [lifecycle.md](docs/lifecycle.md).
+Le state Terraform réel reste **hors du dépôt GitHub**. La destruction des ressources et le nettoyage AWS effectués le 15 octobre 2026 sont consignés dans [lifecycle.md](docs/lifecycle.md).
 
 ## Méthodologie et outils
 
