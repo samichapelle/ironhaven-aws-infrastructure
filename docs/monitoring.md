@@ -144,7 +144,7 @@ La configuration reste adaptée à un environnement de laboratoire :
 - seulement deux métriques personnalisées ;
 - trois sources de journaux ciblées ;
 - rétention limitée à sept jours ;
-- absence de tableau de bord et d’alarme payante à ce stade ;
+- trois alarmes CloudWatch standards déployées, sans action automatique ;
 - arrêt de l’instance EC2 lorsqu’elle n’est pas utilisée.
 
 ## État actuel
@@ -157,3 +157,48 @@ La brique de supervision est opérationnelle :
 - l’agent CloudWatch est actif ;
 - le playbook Ansible est idempotent ;
 - l’infrastructure Terraform ne présente aucune dérive connue.
+
+## Alarmes CloudWatch et simulation d'incident
+
+Le fichier `terraform/alarms.tf` provisionne trois alarmes
+CloudWatch indépendantes :
+
+| Alarme | Condition |
+|---|---|
+| `ironhaven-application-high-cpu` | CPU > 80 %, 2 périodes de 5 minutes |
+| `ironhaven-management-high-cpu` | CPU > 80 %, 2 périodes de 5 minutes |
+| `ironhaven-rds-low-free-storage` | Stockage libre < 2 Gio, 2 périodes de 5 minutes |
+
+Les alarmes CPU utilisent une période de 300 secondes, cohérente
+avec les métriques EC2 du monitoring basique.
+
+Aucune action automatique n'est associée aux alarmes : ni arrêt
+d'instance, ni redémarrage, ni notification SNS.
+
+### Validation du déploiement
+
+Terraform a créé exactement trois alarmes, sans modification
+ni suppression des ressources existantes.
+
+Les trois alarmes ont ensuite été observées à l'état `OK`.
+
+![Trois alarmes CloudWatch opérationnelles](screenshots/cloudwatch-alarms-overview.png)
+
+### Simulation contrôlée
+
+L'API `SetAlarmState` a été utilisée pour forcer temporairement
+l'alarme applicative à l'état `ALARM`.
+
+L'historique CloudWatch a enregistré une transition
+`OK → ALARM`. L'alarme est ensuite revenue à `OK`
+lors de l'évaluation normale des métriques.
+
+![Historique de transition d'une alarme simulée](screenshots/cloudwatch-alarm-state-transition.png)
+
+Cette manipulation démontre la gestion des états et la
+traçabilité CloudWatch. **Elle ne simule pas une réelle
+surcharge CPU**, et ne valide donc pas la détection
+d'une panne applicative réelle.
+
+Les alarmes peuvent entraîner des frais CloudWatch
+selon les conditions du compte AWS.

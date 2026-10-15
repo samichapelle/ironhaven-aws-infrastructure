@@ -386,3 +386,19 @@ des données. Une reconstruction intégrale depuis zéro reste
 à vérifier.
 
 ![Validation du bootstrap PostgreSQL](docs/screenshots/database-bootstrap-reproducibility.png)
+
+## Surveillance et alarmes CloudWatch
+
+En complément des journaux et métriques déjà collectés,
+Terraform déploie trois alarmes CloudWatch pour les CPU
+des deux EC2 et l'espace disque libre de RDS.
+
+Les trois alarmes ont été observées à l'état `OK`.
+Une transition `OK → ALARM` a également été validée
+par simulation contrôlée avec `SetAlarmState`.
+
+![Alarmes CloudWatch](docs/screenshots/cloudwatch-alarms-overview.png)
+
+![Transition d'état simulée](docs/screenshots/cloudwatch-alarm-state-transition.png)
+
+Voir [la documentation de supervision](docs/monitoring.md).
