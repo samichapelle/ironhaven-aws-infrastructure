@@ -43,3 +43,6 @@ Thumbs.db
 
 __pycache__/
 *.py[cod]
+
+# Local Ansible runtime cache
+.ansible/
