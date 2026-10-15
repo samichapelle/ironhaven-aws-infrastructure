@@ -20,17 +20,54 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      - name: Scan Terraform misconfigurations
+      - name: Scan Terraform and enforce reviewed risk baseline
         shell: bash
         run: |
           set -euo pipefail
+
           docker run --rm \
             --volume "$PWD:/workspace:ro" \
             aquasec/trivy@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa \
             config \
             --severity HIGH,CRITICAL \
+            --format json \
             --exit-code 0 \
-            /workspace/terraform
+            /workspace/terraform > /tmp/ironhaven-trivy.json
+
+          jq -r '
+            [.Results[]? |
+              .Target as $target |
+              .Misconfigurations[]? |
+              {target: $target, id: .ID, severity: .Severity}
+            ] as $findings |
+            $findings[] |
+            "FINDING: \\(.severity) \\(.id) \\(.target)"
+          ' /tmp/ironhaven-trivy.json
+
+          jq -e '
+            [.Results[]? |
+              .Target as $target |
+              .Misconfigurations[]? |
+              select(.Severity == "HIGH" or .Severity == "CRITICAL") |
+              {target: $target, id: .ID}
+            ] as $findings |
+            all($findings[];
+              (.id == "AWS-0164" and .target == "network.tf") or
+              (.id == "AWS-0104" and .target == "security.tf") or
+              (.id == "AWS-0132" and .target == "storage.tf")
+            ) and
+            ([ $findings[] |
+               select(.id == "AWS-0164" and .target == "network.tf")
+             ] | length <= 1) and
+            ([ $findings[] |
+               select(.id == "AWS-0104" and .target == "security.tf")
+             ] | length <= 2) and
+            ([ $findings[] |
+               select(.id == "AWS-0132" and .target == "storage.tf")
+             ] | length <= 1)
+          ' /tmp/ironhaven-trivy.json
+
+          echo "PASS: No unexpected HIGH or CRITICAL IaC findings"
 
   ansible-lint:
     name: Ansible | Quality Audit
@@ -50,9 +87,6 @@ jobs:
       - name: Analyze Ansible playbooks
         shell: bash
         run: |
-          set -uo pipefail
-          ansible-lint -p ansible/playbooks/*.yml
-          RESULT=$?
-          echo "ANSIBLE_LINT_EXIT_CODE=$RESULT"
-          echo "AUDIT MODE: report only"
-          exit 0
+          set -euo pipefail
+          ansible-lint --format=pep8 ansible/playbooks/*.yml
+          echo "PASS: Ansible quality checks"
