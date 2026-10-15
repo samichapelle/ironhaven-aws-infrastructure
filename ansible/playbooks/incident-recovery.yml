@@ -1,0 +1,79 @@
+---
+- name: Recover Ironhaven private application after an incident
+  hosts: application
+  become: true
+  gather_facts: false
+
+  vars:
+    application_service: ironhaven-application
+    application_url: http://127.0.0.1:8080
+
+  tasks:
+    - name: Inspect service state before recovery
+      ansible.builtin.command:
+        cmd: systemctl is-active ironhaven-application
+      register: state_before
+      changed_when: false
+      failed_when: false
+
+    - name: Display initial service state
+      ansible.builtin.debug:
+        msg: "INITIAL SERVICE STATE: {{ state_before.stdout }}"
+
+    - name: Ensure application service is running
+      ansible.builtin.systemd_service:
+        name: "{{ application_service }}"
+        state: started
+        enabled: true
+        daemon_reload: true
+      register: recovery_action
+
+    - name: Wait for PostgreSQL-backed health endpoint
+      ansible.builtin.uri:
+        url: "{{ application_url }}/health"
+        status_code: 200
+        return_content: true
+        timeout: 20
+      register: health_result
+      retries: 8
+      delay: 5
+      until: health_result.status | default(0) == 200
+      changed_when: false
+
+    - name: Validate application and database health
+      ansible.builtin.assert:
+        that:
+          - health_result.json.status == "healthy"
+          - health_result.json.postgresql == "connected"
+          - health_result.json.database_user == "ironhaven_reader"
+          - health_result.json.authentication == "iam"
+          - health_result.json.tls == "verify-full"
+        success_msg: "PASS: application and IAM PostgreSQL connectivity restored"
+
+    - name: Verify records endpoint
+      ansible.builtin.uri:
+        url: "{{ application_url }}/records"
+        status_code: 200
+        return_content: true
+        timeout: 20
+      register: records_result
+      changed_when: false
+
+    - name: Validate PostgreSQL records
+      ansible.builtin.assert:
+        that:
+          - records_result.json.count | int >= 3
+          - records_result.json.authentication == "iam"
+          - records_result.json.tls == "verify-full"
+        success_msg: "PASS: PostgreSQL records available after recovery"
+
+    - name: Report service recovery
+      ansible.builtin.debug:
+        msg:
+          - "INITIAL STATE: {{ state_before.stdout }}"
+          - "SERVICE START CHANGED: {{ recovery_action.changed }}"
+          - "HEALTH: {{ health_result.json.status }}"
+          - "POSTGRESQL: {{ health_result.json.postgresql }}"
+          - "DATABASE USER: {{ health_result.json.database_user }}"
+          - "RECORD COUNT: {{ records_result.json.count }}"
+          - "RECOVERY RESULT: PASS"

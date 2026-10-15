@@ -59,6 +59,7 @@ Le Nginx existant sur management reste un service de démonstration distinct.
 - [Décisions techniques](docs/decisions.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Cycle de vie, sauvegarde et destruction AWS](docs/lifecycle.md)
+- [Incident Recovery — diagnostic et reprise automatisée](docs/incident-recovery.md)
 
 ## Sécurité
 
@@ -418,3 +419,22 @@ documentées avec leurs mesures de remédiation possibles.
 ![Infrastructure Security Audit validé](docs/screenshots/github-actions-security-audit.png)
 
 Voir [les règles et exceptions documentées](docs/security-scanning.md).
+
+## Incident Recovery — reprise après incident
+
+Un exercice contrôlé a simulé l'arrêt du service Flask/Gunicorn
+sur l'EC2 applicative privée.
+
+La panne a été constatée via SSM (`systemd` inactif, échec HTTP),
+puis le service restauré par Ansible. Les endpoints `/health`
+et `/records` ont validé la connexion PostgreSQL avec IAM et TLS.
+
+**Résultats :** récupération Ansible en 14 secondes,
+3 enregistrements SQL disponibles, puis seconde exécution
+idempotente (`changed=0`, `failed=0`).
+
+Ces mesures correspondent à un test unique, et non à un RTO garanti.
+
+![Reprise du service applicatif](docs/screenshots/incident-recovery-restored.png)
+
+[Lire le rapport d'incident complet](docs/incident-recovery.md).
