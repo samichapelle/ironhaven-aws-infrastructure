@@ -41,7 +41,7 @@ jobs:
               {target: $target, id: .ID, severity: .Severity}
             ] as $findings |
             $findings[] |
-            "FINDING: \\(.severity) \\(.id) \\(.target)"
+            "FINDING: \(.severity) \(.id) \(.target)"
           ' /tmp/ironhaven-trivy.json
 
           jq -e '
