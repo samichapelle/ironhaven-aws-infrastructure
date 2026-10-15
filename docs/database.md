@@ -180,7 +180,7 @@ Cette implémentation constitue une base de démonstration sécurisée, mais plu
 - authentification TLS vérifiée côté client (`verify-full`, validée) ;
 - tests réguliers de restauration.
 
-La prochaine étape est le déploiement automatisé du service HTTP applicatif, puis la validation d'une requête SQL réalisée par ce service.
+Cette étape a depuis été réalisée : Flask/Gunicorn est déployé sur l'EC2 privée, et l'endpoint `/records` effectue une lecture réelle de PostgreSQL avec authentification IAM et TLS vérifié.
 
 ## Durcissement final : authentification IAM et lecture seule
 
@@ -222,13 +222,15 @@ applicative a également renvoyé `AccessDeniedException`.
 
 ### Séparation provisionnement / exploitation
 
-Le script `ansible/files/database/create_reader.py` documente
-le provisionnement initial du rôle SQL, effectué avant la
-révocation de l'accès au secret administrateur.
+Le provisionnement initial du compte SQL utilisait une
+méthode d'administration antérieure, distincte des
+permissions applicatives actuelles.
 
-Le playbook `database-reader.yml` est un outil de
-*bootstrap administrateur*, et non un playbook à lancer
-régulièrement avec les permissions applicatives actuelles.
+La méthode maintenue est le script local
+`ansible/scripts/bootstrap_database.py`, présenté plus bas.
+Il passe par un tunnel SSM et utilise les permissions
+administratives du poste WSL, sans rétablir l'accès au secret
+maître sur l'EC2 applicative.
 
 Le playbook `test-database-iam.yml` vérifie séparément
 la connexion IAM, le certificat TLS et le refus d'écriture.

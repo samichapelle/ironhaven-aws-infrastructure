@@ -58,6 +58,7 @@ Le Nginx existant sur management reste un service de démonstration distinct.
 - [Analyse Trivy et CI](docs/security-scanning.md)
 - [Décisions techniques](docs/decisions.md)
 - [Troubleshooting](docs/troubleshooting.md)
+- [Cycle de vie, sauvegarde et destruction AWS](docs/lifecycle.md)
 
 ## Sécurité
 
@@ -340,12 +341,13 @@ explicite de concurrence reste à réaliser.
 
 ## CI/CD et authentification AWS OIDC
 
-Ironhaven utilise trois workflows GitHub Actions :
+Ironhaven utilise quatre workflows GitHub Actions :
 
 - **Container security** : construction de l'image Nginx et
   analyse Trivy des vulnérabilités HIGH/CRITICAL corrigibles.
 - **Infrastructure CI** : contrôles Terraform (`fmt`, `validate`),
   validation YAML Ansible et syntaxe Python.
+- **Infrastructure Security Audit** : analyse Terraform avec Trivy IaC et contrôle bloquant Ansible-lint, avec quatre exceptions HIGH/CRITICAL documentées.
 - **AWS OIDC Validation** : authentification fédérée auprès
   d'AWS STS avec un jeton GitHub temporaire, sans clé AWS
   permanente enregistrée dans GitHub.

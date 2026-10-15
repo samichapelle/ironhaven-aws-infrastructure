@@ -244,7 +244,7 @@ Les éléments suivants sont désormais opérationnels :
 - validation de la syntaxe SSH avant redémarrage ;
 - exécution idempotente du playbook.
 
-Docker et le service Nginx ont depuis été déployés sur management avec le playbook `container.yml`. La prochaine étape est l'automatisation du service HTTP sur l'EC2 applicative privée.
+Docker et Nginx sont déployés sur management via `container.yml`. Le service Flask/Gunicorn de l'EC2 applicative privée est désormais déployé avec `application.yml` et validé par les endpoints `/health` et `/records`.
 
 ## Déploiement de l'application privée
 

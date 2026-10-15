@@ -117,7 +117,7 @@ Il ne constitue pas encore un pipeline CI/CD complet : l’image validée n’es
 
 Une évolution vers la livraison ou le déploiement continu pourrait ajouter :
 
-1. une authentification temporaire auprès d’AWS avec GitHub OIDC, sans clé d’accès permanente ;
+1. réutiliser l'authentification GitHub OIDC déjà validée, en ajoutant seulement les permissions minimales nécessaires à un éventuel déploiement ;
 2. la publication de l’image validée dans Amazon ECR ;
 3. le déploiement sur l’instance avec Systems Manager ou Ansible ;
 4. un test HTTP après déploiement ;
