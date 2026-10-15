@@ -402,3 +402,17 @@ par simulation contrôlée avec `SetAlarmState`.
 ![Transition d'état simulée](docs/screenshots/cloudwatch-alarm-state-transition.png)
 
 Voir [la documentation de supervision](docs/monitoring.md).
+
+## Analyse IaC et qualité Ansible
+
+Le workflow **Infrastructure Security Audit** complète
+les contrôles existants avec une analyse Terraform par
+Trivy et un contrôle de qualité des playbooks via Ansible-lint.
+
+Les deux jobs sont bloquants. Quatre alertes IaC connues
+sont explicitement acceptées pour ce laboratoire et
+documentées avec leurs mesures de remédiation possibles.
+
+![Infrastructure Security Audit validé](docs/screenshots/github-actions-security-audit.png)
+
+Voir [les règles et exceptions documentées](docs/security-scanning.md).

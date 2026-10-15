@@ -150,3 +150,45 @@ Le contrôle actuel se concentre sur les vulnérabilités des paquets du contene
 - une signature et une vérification cryptographique des images produites.
 
 Ces éléments constituent des améliorations possibles pour une utilisation au-delà du laboratoire.
+
+## Contrôles IaC et qualité Ansible
+
+Le workflow `.github/workflows/infrastructure-security.yml`
+complète l'analyse des conteneurs par deux contrôles automatisés :
+
+- **Trivy IaC** : analyse HIGH/CRITICAL des configurations Terraform ;
+- **Ansible-lint** : analyse de qualité bloquante des playbooks.
+
+### Politique de sécurité Terraform
+
+Le scanner utilise une liste de risques connus, limitée
+aux identifiants, fichiers et nombres d'occurrences attendus.
+Toute nouvelle alerte HIGH/CRITICAL hors de cette liste
+fait échouer le job GitHub Actions.
+
+| Règle | Niveau | Justification du lab | Remédiation envisagée |
+|---|---|---|---|
+| AWS-0164 | HIGH | Attribution automatique d'IP publiques dans le subnet management | Désactiver `map_public_ip_on_launch` et gérer les adresses explicitement |
+| AWS-0104 (2 occurrences) | CRITICAL | HTTPS sortant depuis management et application pour AWS et les dépôts logiciels | Réduire les destinations, envisager VPC endpoints et accès contrôlé aux dépôts |
+| AWS-0132 | HIGH | Bucket temporaire Ansible chiffré avec SSE-S3 pour limiter la complexité et les coûts du lab | Étudier SSE-KMS avec une clé gérée par le client |
+
+Ces exceptions sont des **risques acceptés pour un
+environnement de démonstration temporaire**, pas des
+recommandations de configuration pour la production.
+
+Le contrôle porte actuellement sur les alertes de sévérité
+HIGH et CRITICAL renvoyées par Trivy. Une exception est limitée
+à son identifiant, son fichier et son nombre d'occurrences.
+
+Cette méthode ne garantit pas que tous les risques de sécurité
+sont détectés, ni qu'une exception existante ne puisse
+masquer une nouvelle occurrence identique si une ancienne
+occurrence a disparu.
+
+### Validation GitHub Actions
+
+Les deux jobs ont été exécutés avec succès :
+les quatre alertes connues ont été affichées et aucune
+alerte HIGH/CRITICAL supplémentaire n'a été acceptée.
+
+![Trivy IaC et Ansible-lint : contrôle bloquant réussi](screenshots/github-actions-security-audit.png)
