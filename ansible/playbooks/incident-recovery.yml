@@ -10,15 +10,11 @@
 
   tasks:
     - name: Inspect service state before recovery
-      ansible.builtin.command:
-        cmd: systemctl is-active ironhaven-application
-      register: state_before
-      changed_when: false
-      failed_when: false
+      ansible.builtin.service_facts:
 
     - name: Display initial service state
       ansible.builtin.debug:
-        msg: "INITIAL SERVICE STATE: {{ state_before.stdout }}"
+        msg: "INITIAL SERVICE STATE: {{ ansible_facts.services['ironhaven-application.service'].state }}"
 
     - name: Ensure application service is running
       ansible.builtin.systemd_service:
@@ -70,7 +66,7 @@
     - name: Report service recovery
       ansible.builtin.debug:
         msg:
-          - "INITIAL STATE: {{ state_before.stdout }}"
+          - "INITIAL STATE: {{ ansible_facts.services['ironhaven-application.service'].state }}"
           - "SERVICE START CHANGED: {{ recovery_action.changed }}"
           - "HEALTH: {{ health_result.json.status }}"
           - "POSTGRESQL: {{ health_result.json.postgresql }}"
