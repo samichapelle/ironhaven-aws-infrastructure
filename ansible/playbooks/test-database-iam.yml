@@ -26,7 +26,7 @@
 
     - name: Copy IAM database verification script
       ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../files/database/test_iam_reader.py"
+        src: "{{ (playbook_dir | dirname) ~ '/files/database/test_iam_reader.py' }}"
         dest: "{{ app_root }}/test_iam_reader.py"
         owner: ironhaven-app
         group: ironhaven-app

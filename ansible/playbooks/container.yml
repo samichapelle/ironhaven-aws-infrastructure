@@ -40,7 +40,7 @@
 
     - name: Copy Ironhaven Nginx Dockerfile
       ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../files/nginx/Dockerfile"
+        src: "{{ (playbook_dir | dirname) ~ '/files/nginx/Dockerfile' }}"
         dest: "{{ ironhaven_nginx_build_root }}/Dockerfile"
         owner: root
         group: root
