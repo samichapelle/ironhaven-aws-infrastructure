@@ -15,37 +15,35 @@ Le projet a été exécuté sur un véritable compte AWS dans la région **Paris
 ### Architecture
 
 ```mermaid
-flowchart TB
-    Operator["Administrateur<br/>WSL2 · Terraform · Ansible"]
-    GitHub["GitHub Actions<br/>CI · Trivy · Ansible-lint"]
+flowchart LR
+    OPS["Administrateur<br/>WSL2 · Terraform · Ansible"]
+    CI["GitHub Actions<br/>CI · Trivy · Ansible-lint"]
+    STATE[("S3 · Terraform state")]
     SSM["AWS Systems Manager"]
-    S3State[("S3<br/>Terraform remote state")]
-    Secrets["AWS Secrets Manager<br/>Secret administrateur RDS"]
 
-    subgraph AWS["AWS eu-west-3 · VPC 10.42.0.0/16"]
-        direction TB
-        subgraph Public["Subnet public · 10.42.10.0/24"]
-            MGMT["EC2 Management<br/>Amazon Linux 2023<br/>Docker · Nginx · CloudWatch Agent"]
+    subgraph VPC["AWS eu-west-3 · VPC 10.42.0.0/16"]
+        direction LR
+        subgraph PUBLIC["Public"]
+            MGMT["EC2 management<br/>Docker · Nginx"]
             NAT["NAT Gateway"]
         end
-        subgraph Application["Subnet privé applicatif · 10.42.20.0/24"]
-            APP["EC2 Application<br/>Flask · Gunicorn · systemd"]
+        subgraph PRIVATE["Application privée"]
+            APP["EC2 application<br/>Flask · Gunicorn"]
         end
-        subgraph Data["Subnets privés données · deux AZ"]
-            RDS[("RDS PostgreSQL<br/>Single-AZ · IAM DB Auth")]
+        subgraph DATA["Données privées · 2 subnets"]
+            DB[("RDS PostgreSQL<br/>Single-AZ")]
         end
+        MGMT -->|"HTTP 8080"| APP
+        APP -->|"IAM · TLS<br/>TCP 5432"| DB
+        APP -->|"HTTPS sortant"| NAT
     end
 
-    Operator -->|"Terraform"| AWS
-    Operator -->|"Remote state"| S3State
-    Operator -->|"Ansible via SSM"| SSM
+    OPS -->|"Terraform"| VPC
+    OPS --> STATE
+    OPS --> SSM
     SSM -.-> MGMT
     SSM -.-> APP
-    MGMT -->|"HTTP TCP 8080"| APP
-    APP -->|"PostgreSQL TCP 5432<br/>IAM · TLS verify-full"| RDS
-    APP -->|"HTTPS sortant"| NAT
-    RDS -.-> Secrets
-    GitHub -.->|"OIDC : identité STS uniquement"| AWS
+    CI -.->|"OIDC : STS seulement"| VPC
 ```
 
 **Segmentation :** quatre sous-réseaux, trois Security Groups, aucune règle entrante depuis Internet, EC2 applicative et RDS sans IP publique. L'EC2 management possède une IP publique pour ses accès sortants, mais aucun port entrant autorisé.
@@ -145,13 +143,17 @@ Il s'agit d'une **reprise de service**, pas d'un plan de reprise après sinistre
 
 ### Preuves sélectionnées
 
-| Architecture et accès | Application et base de données |
-|---|---|
-| ![Cartographie des ressources VPC](docs/screenshots/vpc-resource-map.png) | ![Connexion IAM et TLS PostgreSQL](docs/screenshots/application-iam-tls-validation.png) |
-| ![Vérification du remote state S3](docs/screenshots/terraform-remote-state-validation.png) | ![Accès au secret maître refusé](docs/screenshots/application-secret-access-denied.png) |
-| ![Contrôles GitHub Actions](docs/screenshots/github-actions-security-audit.png) | ![Restauration applicative Ansible](docs/screenshots/incident-recovery-restored.png) |
+**Architecture réseau et segmentation**
 
-Les autres captures, les commandes de diagnostic et les résultats détaillés figurent dans les documents spécialisés.
+![Cartographie VPC AWS](docs/screenshots/vpc-resource-map.png)
+
+**Récupération d'un service applicatif via Ansible et SSM**
+
+![Récupération applicative validée](docs/screenshots/incident-recovery-restored.png)
+
+**Autres validations techniques :** [Terraform remote state](docs/screenshots/terraform-remote-state-validation.png) · [IAM et TLS PostgreSQL](docs/screenshots/application-iam-tls-validation.png) · [Accès au secret administrateur refusé](docs/screenshots/application-secret-access-denied.png) · [Trivy IaC et Ansible-lint](docs/screenshots/github-actions-security-audit.png).
+
+Les autres preuves et leurs contextes figurent dans les documents techniques.
 
 ## Documentation
 
